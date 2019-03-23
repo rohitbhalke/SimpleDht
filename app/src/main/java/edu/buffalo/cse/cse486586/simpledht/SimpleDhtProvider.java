@@ -77,10 +77,11 @@ public class SimpleDhtProvider extends ContentProvider {
     public static final String GDUMP = "*";
     public static final String QUERY = "QUERY";
 
-    public static Cursor cursor;
+    public static Cursor cursor = null;
 
     public static String queryGeneratedFrom = null;
 
+    public static boolean waitTillQueryResult = false;
 
     private ContentResolver mContentResolver;
     public static Context currentContext;
@@ -415,8 +416,13 @@ public class SimpleDhtProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
                         String sortOrder) {
-        Cursor cursor = null;
+        //Cursor cursor = null;
+
         // TODO Auto-generated method stub
+        String[] columnNames = {"key", "value"};
+
+        cursor = new MatrixCursor(columnNames);
+
         if(selection.equals(LDUMP)){
 
         }
@@ -462,7 +468,10 @@ public class SimpleDhtProvider extends ContentProvider {
 
          */
 
+        while(!waitTillQueryResult) {
 
+        }
+        waitTillQueryResult = false;
     }
 
     private Cursor findInLocal(String keyToFind) {
@@ -746,9 +755,11 @@ public class SimpleDhtProvider extends ContentProvider {
                         Log.i("QUERY_ANSWER", splittedMessage[2]);
                         String value = splittedMessage[2].split(":")[1];
                         String[] columnNames = {"key", "value"};
-                        MatrixCursor cursor = new MatrixCursor(columnNames);
+                        MatrixCursor cursor1 = new MatrixCursor(columnNames);
                         String[] columnValues = {keyToSearch, value};
-                        cursor.addRow(columnValues);
+                        cursor1.addRow(columnValues);
+                        cursor = cursor1;
+                        waitTillQueryResult = true;
 
                     }
 
