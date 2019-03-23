@@ -82,6 +82,7 @@ public class SimpleDhtProvider extends ContentProvider {
     public static String queryGeneratedFrom = null;
 
     public static boolean waitTillQueryResult = false;
+    public static boolean thisIsAnotherAVDSQuery = false;
 
     private ContentResolver mContentResolver;
     public static Context currentContext;
@@ -420,7 +421,7 @@ public class SimpleDhtProvider extends ContentProvider {
 
         // TODO Auto-generated method stub
         String[] columnNames = {"key", "value"};
-
+        Log.i("QUERY_FOR_KEY", selection);
         cursor = new MatrixCursor(columnNames);
 
         if(selection.equals(LDUMP)){
@@ -451,7 +452,7 @@ public class SimpleDhtProvider extends ContentProvider {
                 }
             }
         }
-        Log.i("QUERY", "QUERY");
+
         return cursor;
     }
 
@@ -468,9 +469,12 @@ public class SimpleDhtProvider extends ContentProvider {
 
          */
 
-        while(!waitTillQueryResult) {
+        if(!thisIsAnotherAVDSQuery) {
+            while (!waitTillQueryResult) {
 
+            }
         }
+        thisIsAnotherAVDSQuery = false;
         waitTillQueryResult = false;
     }
 
@@ -745,6 +749,7 @@ public class SimpleDhtProvider extends ContentProvider {
                         }
                     }
                     else if(messageType.equals(QUERY)) {
+                        thisIsAnotherAVDSQuery = true;
                         Log.i("QUERY_SERVER", splittedMessage[1]);
                         String keyToSearch = splittedMessage[2].split(":")[1];
                         queryGeneratedFrom = splittedMessage[3].split(":")[1];
@@ -760,6 +765,7 @@ public class SimpleDhtProvider extends ContentProvider {
                         cursor1.addRow(columnValues);
                         cursor = cursor1;
                         waitTillQueryResult = true;
+                        thisIsAnotherAVDSQuery = false;
 
                     }
 
