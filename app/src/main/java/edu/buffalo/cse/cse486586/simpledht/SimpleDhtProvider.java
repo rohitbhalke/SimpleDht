@@ -22,6 +22,7 @@ import java.security.PublicKey;
 import java.util.Collections;
 import java.util.Formatter;
 import java.util.HashMap;
+import java.io.File;
 
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
@@ -424,6 +425,26 @@ public class SimpleDhtProvider extends ContentProvider {
         Log.i("QUERY_FOR_KEY", selection);
         cursor = new MatrixCursor(columnNames);
 
+        String selfPortHash = null;
+        try {
+            selfPortHash = genHash(myPortId);
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+
+        // First handle for only one AVD
+        // Here also check predessor.equals("") && successor.equals("") because for 1st mark
+        // any random avd is chosen for local operations.
+        // And since AVD 0 handles the join operation, these would be set to
+        // blank as, node_join req never goes to the AVD 0
+        if ((selfPortHash.equals(successor) && selfPortHash.equals(predessor) || (predessor.equals("") && successor.equals("")))) {
+            // For single AVD, it doesnt matter
+            Log.i("Single_AVD_QUERY", selection);
+            if(selection.equals(LDUMP) || selection.equals(GDUMP)) {
+                return getAllDataFromLocal(uri);
+            }
+        }
+
         if(selection.equals(LDUMP)){
 
         }
@@ -454,6 +475,31 @@ public class SimpleDhtProvider extends ContentProvider {
         }
 
         return cursor;
+    }
+
+    private Cursor getAllDataFromLocal(Uri uri) {
+        File fileDirectory = currentContext.getFilesDir();
+        File[] listOfFiles = fileDirectory.listFiles();
+        String[] columnNames = {"key", "value"};
+        MatrixCursor cursor = new MatrixCursor(columnNames);
+        try {
+            for (int i = 0; i < listOfFiles.length; i++) {
+                File currentFile = listOfFiles[i];
+                FileInputStream fileReaderStream = currentContext.openFileInput(currentFile.getName());
+                InputStreamReader inputStream = new InputStreamReader(fileReaderStream);
+                BufferedReader br = new BufferedReader(inputStream);
+                String messageReceived = br.readLine();
+                Log.v("File Content: ", messageReceived);
+                String[] columnValues = {currentFile.getName(), messageReceived};
+                cursor.addRow(columnValues);
+            }
+        }
+        catch (Exception e){
+            Log.e("Exception", "Exception in reading all local files");
+            System.out.println(e.getStackTrace());
+        }
+        return cursor;
+
     }
 
     private void sendQuery(String keyToFind, String myPortId, String target) {
