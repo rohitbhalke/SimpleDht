@@ -75,6 +75,12 @@ public class SimpleDhtProvider extends ContentProvider {
     public static String zeroAVD = "11108";
     public static final String LDUMP = "@";
     public static final String GDUMP = "*";
+    public static final String QUERY = "QUERY";
+
+    public static Cursor cursor;
+
+    public static String queryGeneratedFrom = null;
+
 
     private ContentResolver mContentResolver;
     public static Context currentContext;
@@ -409,6 +415,7 @@ public class SimpleDhtProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
                         String sortOrder) {
+        Cursor cursor = null;
         // TODO Auto-generated method stub
         if(selection.equals(LDUMP)){
 
@@ -422,28 +429,47 @@ public class SimpleDhtProvider extends ContentProvider {
             if(where.equals("PREDESSOR")){
                 // Send message to Predessor
                 Log.i("QUERY-PREDESSOR-SEARCH", keyToFind +"  " + sortedLookUpMap.get(predessor));
+                sendQuery(keyToFind, myPortId, predessor);
+
             }
             else if(where.equals("SUCCESSOR")){
                 // Send message to Successor
                 Log.i("QUERY-SUCCESSOR-SEARCH", keyToFind +"  " + sortedLookUpMap.get(successor));
+                sendQuery(keyToFind, myPortId, successor);
             }
             else if(where.equals("SELF")){
                 Log.i("QUERY-LOCAL-SEARCH", keyToFind);
-                Cursor cursor = findInLocal(keyToFind);
+                cursor = findInLocal(keyToFind);
                 if(cursor != null){
                     return cursor;
                 }
             }
         }
         Log.i("QUERY", "QUERY");
-        return null;
+        return cursor;
+    }
+
+    private void sendQuery(String keyToFind, String myPortId, String target) {
+
+        String msg = QUERY;
+        new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, sortedLookUpMap.get(target), keyToFind, myPortId);
+        //while()
+        /*
+                    Things remainining
+                    1) Now how do the query generator port know to wait for the Cursor to return from
+                    ServerTask. ( Right now it is getting returned from Query method, we need a
+                    machanism to stop execution here, till cursor is set from server task)
+
+         */
+
+
     }
 
     private Cursor findInLocal(String keyToFind) {
 
         try{
             Log.v("query", keyToFind);
-            FileInputStream fileReaderStream = getContext().openFileInput(keyToFind);
+            FileInputStream fileReaderStream = currentContext.openFileInput(keyToFind);
             InputStreamReader inputStream = new InputStreamReader(fileReaderStream);
             BufferedReader br = new BufferedReader(inputStream);
             String messageReceived = br.readLine();
@@ -452,6 +478,17 @@ public class SimpleDhtProvider extends ContentProvider {
             MatrixCursor cursor = new MatrixCursor(columnNames);
             String[] columnValues = {keyToFind, messageReceived};
             cursor.addRow(columnValues);
+
+            // Check whether the request was generated from anotherAVD
+            if(queryGeneratedFrom != null ){
+            // Ask client to send the cursor as QUERY_ANSWER
+                String msg = "QUERY_ANSWER";
+                String value = messageReceived;
+                new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, queryGeneratedFrom, keyToFind, myPortId, value);
+                queryGeneratedFrom = null;
+            }
+
+
             return cursor;
         }
         catch (Exception e) {
@@ -698,6 +735,22 @@ public class SimpleDhtProvider extends ContentProvider {
                             askSuccessorToInsertMessage(key, value);
                         }
                     }
+                    else if(messageType.equals(QUERY)) {
+                        Log.i("QUERY_SERVER", splittedMessage[1]);
+                        String keyToSearch = splittedMessage[2].split(":")[1];
+                        queryGeneratedFrom = splittedMessage[3].split(":")[1];
+                        DHT.query(mUri, null, keyToSearch, null, null);
+                    }
+                    else if(messageType.equals("QUERY_ANSWER")) {
+                        String keyToSearch = splittedMessage[1].split(":")[1];
+                        Log.i("QUERY_ANSWER", splittedMessage[2]);
+                        String value = splittedMessage[2].split(":")[1];
+                        String[] columnNames = {"key", "value"};
+                        MatrixCursor cursor = new MatrixCursor(columnNames);
+                        String[] columnValues = {keyToSearch, value};
+                        cursor.addRow(columnValues);
+
+                    }
 
                 } catch (IOException e) {
                     Log.i("Server_Failed", "YE");
@@ -865,6 +918,68 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     stream.flush();
                     out.flush();
+                }
+                else if(order.equals(QUERY)) {
+                    String target = msgs[1];
+                    String keyToFind = msgs[2];
+                    String myPortId = msgs[3];
+
+                    Message message = new Message("QUERY");
+                    message.setAssociatedPort(myPortId);
+                    message.setKeyToSearch(keyToFind);
+
+
+                    if(queryGeneratedFrom != null) {
+                        message.setQueryPort(queryGeneratedFrom);
+                    }
+                    else {
+                        message.setQueryPort(myPortId);
+                    }
+                    Log.i("SEND_QUERY_MSG", msgs[1]);
+
+                    socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                            Integer.parseInt(target));
+                    socket.setSoTimeout(3000);
+                    stream = socket.getOutputStream();
+
+
+                    OutputStreamWriter out = new OutputStreamWriter(stream,
+                            "UTF-8");
+                    dos = new DataOutputStream(stream);
+
+                    dos.writeUTF(message.getString());
+
+                    stream.flush();
+                    out.flush();
+
+                }
+                else if(order.equals("QUERY_ANSWER")) {
+                    Message message = new Message("QUERY_ANSWER");
+
+                    Log.i("SEND_QUERY_MSG_ANSWER", msgs[1]);
+
+                    String target = msgs[1];
+                    String keyToFind = msgs[2];
+                    String value = msgs[4];
+
+                    message.setKeyToSearch(keyToFind);
+                    message.setQueryAnswer(value);
+
+                    socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                            Integer.parseInt(target));
+                    socket.setSoTimeout(3000);
+                    stream = socket.getOutputStream();
+
+
+                    OutputStreamWriter out = new OutputStreamWriter(stream,
+                            "UTF-8");
+                    dos = new DataOutputStream(stream);
+
+                    dos.writeUTF(message.getString());
+
+                    stream.flush();
+                    out.flush();
+
                 }
             }
             catch (UnknownHostException unknownHost){

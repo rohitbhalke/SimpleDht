@@ -4,6 +4,59 @@ public class Message {
 
     private String messageType = null;
     private String client =null;
+    private String uri =null;
+    private String queryPort = null;
+    private String keyToSearch = null, associatedPort=null;
+    String key = null, value= null;
+    String queryAnswer = null;
+
+    public String getQueryAnswer() {
+        return queryAnswer;
+    }
+
+    public void setQueryAnswer(String queryAnswer) {
+        this.queryAnswer = queryAnswer;
+    }
+
+
+
+    public String getUri() {
+        return uri;
+    }
+
+    public void setUri(String uri) {
+        this.uri = uri;
+    }
+
+
+
+    public String getQueryPort() {
+        return queryPort;
+    }
+
+    public void setQueryPort(String queryPort) {
+        this.queryPort = queryPort;
+    }
+
+
+
+    public String getKeyToSearch() {
+        return keyToSearch;
+    }
+
+    public void setKeyToSearch(String keyToSearch) {
+        this.keyToSearch = keyToSearch;
+    }
+
+    public String getAssociatedPort() {
+        return associatedPort;
+    }
+
+    public void setAssociatedPort(String associatedPort) {
+        this.associatedPort = associatedPort;
+    }
+
+
 
     public String getKey() {
         return key;
@@ -21,7 +74,7 @@ public class Message {
         this.value = value;
     }
 
-    String key = null, value= null;
+
     public String getConnectedClients() {
         return connectedClients;
     }
@@ -86,6 +139,22 @@ public class Message {
         }
         if(this.value != null) {
             sb.append("value:" + this.value);
+            sb.append(";");
+        }
+        if(this.associatedPort != null) {
+            sb.append("associatedPort:" + this.associatedPort);
+            sb.append(";");
+        }
+        if(this.keyToSearch != null){
+            sb.append("keyToSearch:" + this.keyToSearch);
+            sb.append(";");
+        }
+        if(this.queryPort != null) {
+            sb.append("queryPort:" + this.queryPort);
+            sb.append(";");
+        }
+        if(this.queryAnswer != null) {
+            sb.append("queryAnswer:" + this.queryAnswer);
             sb.append(";");
         }
         return sb.toString();
