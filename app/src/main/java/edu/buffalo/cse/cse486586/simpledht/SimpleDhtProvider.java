@@ -77,6 +77,11 @@ public class SimpleDhtProvider extends ContentProvider {
     public static final String LDUMP = "@";
     public static final String GDUMP = "*";
     public static final String QUERY = "QUERY";
+    public static final String GDUMP_QUERY = "GLOBALQUERY";
+    public static final String GDUMP_QUERY_ANSWER = "GLOBAL_QUERY_ANSWER";
+
+    private static final String KEY_FIELD = "key";
+    private static final String VALUE_FIELD = "value";
 
     public static Cursor cursor = null;
 
@@ -162,14 +167,15 @@ public class SimpleDhtProvider extends ContentProvider {
             String selfPortHash = genHash(myPortId);
 
             // Suppose only one AVD is there in DHT
+            Log.i("KEY_HASH", "key: "+ key+"  HashKey: "+hashOfKey);
             if (selfPortHash.equals(successor) && selfPortHash.equals(predessor)) {
                 return insertInLocalDb(uri, key, value);
             }
-
-            // Middle Node
-            if (predessor.compareTo(selfPortHash)<0 && selfPortHash.compareTo(successor)<0){
+            else if (predessor.compareTo(selfPortHash)<0 && selfPortHash.compareTo(successor)<0){
+                // Middle Node
                 if(hashOfKey.compareTo(selfPortHash) < 0) {
                     // Ask Predessor
+                    Log.i("SEND_INSERT", "ASK Predessor TO Take Care - Middle Node");
                     String msg = "INSERT";
                     new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(predessor));
                 }
@@ -178,6 +184,7 @@ public class SimpleDhtProvider extends ContentProvider {
                 }
                 else if(hashOfKey.compareTo(successor)>0){
                     // Ask Successor
+                    Log.i("SEND_INSERT", "ASK Successor TO Take Care - Middle Node");
                     String msg = "INSERT";
                     new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(successor));
                 }
@@ -195,6 +202,7 @@ public class SimpleDhtProvider extends ContentProvider {
                 }
                 else {
                     // ASK Successor TO Take Care
+                    Log.i("SEND_INSERT", "ASK Successor TO Take Care - First Node");
                     String msg = "INSERT";
                     new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(successor));
                 }
@@ -446,10 +454,13 @@ public class SimpleDhtProvider extends ContentProvider {
         }
 
         if(selection.equals(LDUMP)){
-
+            Log.i("LOCAL_DUMP", "Querying Local Dump");
+            return getAllDataFromLocal(uri);
         }
         else if(selection.equals(GDUMP)){
-
+            // Get all the messages stored in entire DHT
+            Log.i("QUERY-GDUMP", "Get all the messages stored in DHT");
+            new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, GDUMP_QUERY, myPortId);
         }
         else {
             String keyToFind = selection;
@@ -814,6 +825,38 @@ public class SimpleDhtProvider extends ContentProvider {
                         thisIsAnotherAVDSQuery = false;
 
                     }
+                    else if(messageType.equals(GDUMP_QUERY)) {
+                        String queryPort = splittedMessage[1].split(":")[1];
+                        Cursor cursor1 = DHT.getAllDataFromLocal(mUri);
+                        int keyIndex = cursor1.getColumnIndex(KEY_FIELD);
+                        int valueIndex = cursor1.getColumnIndex(VALUE_FIELD);
+
+                        Message responseMessage = new Message(GDUMP_QUERY_ANSWER);
+                        StringBuilder sb = new StringBuilder();
+
+                        while(cursor1.moveToNext()) {
+                            sb.append(cursor1.getString(keyIndex));
+                            sb.append(" ");
+                            sb.append(cursor1.getString(valueIndex));
+                            sb.append(",");
+                            // key value,key value,key value
+                        }
+
+                        responseMessage.setGDUMP_Response(sb.toString());
+                        OutputStream outputStream = socket.getOutputStream();
+                        dos = new DataOutputStream(outputStream);
+
+                        dos.writeUTF(responseMessage.getString());
+                        // Remaining send message
+                        outputStream.close();
+                        dos.close();
+                    }
+                    else if(messageType.equals(GDUMP_QUERY_ANSWER)) {
+                        // Write this method
+                        // Combine everyones anser and also call to getAllDataFromLocal to get its own keys and
+                        // then return the result
+
+                    }
 
                 } catch (IOException e) {
                     Log.i("Server_Failed", "YE");
@@ -1042,6 +1085,32 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     stream.flush();
                     out.flush();
+
+                }
+                else if(order.equals(GDUMP_QUERY)) {
+                    Message message =  new Message(GDUMP_QUERY);
+                    String queryPort = msgs[1];
+                    message.setQueryPort(queryPort);
+                    Log.i("SEND_GLOBAL_QUERY_MSG", msgs[1]);
+
+                    for(String client : lookUpMap.keySet()) {
+                        if(!client.equals(queryPort)) {
+                            socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                                    Integer.parseInt(client));
+                            socket.setSoTimeout(3000);
+                            stream = socket.getOutputStream();
+
+
+                            OutputStreamWriter out = new OutputStreamWriter(stream,
+                                    "UTF-8");
+                            dos = new DataOutputStream(stream);
+
+                            dos.writeUTF(message.getString());
+
+                            stream.flush();
+                            out.flush();
+                        }
+                    }
 
                 }
             }

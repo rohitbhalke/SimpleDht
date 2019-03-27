@@ -7,8 +7,20 @@ public class Message {
     private String uri =null;
     private String queryPort = null;
     private String keyToSearch = null, associatedPort=null;
+
+    private String GDUMP_Response = null;
+    public String getGDUMP_Response() {
+        return GDUMP_Response;
+    }
+
+    public void setGDUMP_Response(String GDUMP_Response) {
+        this.GDUMP_Response = GDUMP_Response;
+    }
+
+
     String key = null, value= null;
     String queryAnswer = null;
+
 
     public String getQueryAnswer() {
         return queryAnswer;
@@ -155,6 +167,10 @@ public class Message {
         }
         if(this.queryAnswer != null) {
             sb.append("queryAnswer:" + this.queryAnswer);
+            sb.append(";");
+        }
+        if(this.GDUMP_Response !=  null) {
+            sb.append("gdumpAnswer:" + this.GDUMP_Response);
             sb.append(";");
         }
         return sb.toString();
