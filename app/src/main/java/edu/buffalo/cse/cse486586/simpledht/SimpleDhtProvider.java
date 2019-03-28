@@ -569,7 +569,7 @@ public class SimpleDhtProvider extends ContentProvider {
             Log.i("QUERY-GDUMP", "Get all the messages stored in DHT");
             new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, GDUMP_QUERY, myPortId);
             Log.i("Wait_Start", "globalQueryResultReceived:: " + globalQueryResultReceived);
-            while(globalQueryResultReceived != portNumbers.size()-1) {
+            while(globalQueryResultReceived != portNumbers.size()) {
                 // wait here
             }
             Log.i("Wait_Over", "globalQueryResultReceived:: " + globalQueryResultReceived);
@@ -955,6 +955,7 @@ public class SimpleDhtProvider extends ContentProvider {
                         int valueIndex = cursor1.getColumnIndex(VALUE_FIELD);
 
                         Message responseMessage = new Message(GDUMP_QUERY_ANSWER);
+                        responseMessage.setQueryPort(queryPort);
                         StringBuilder sb = new StringBuilder();
 
                         while(cursor1.moveToNext()) {
@@ -966,13 +967,14 @@ public class SimpleDhtProvider extends ContentProvider {
                         }
                         Log.i("GDUMP_QUERY_Response", responseMessage.getString());
                         responseMessage.setGDUMP_Response(sb.toString());
-                        OutputStream outputStream = socket.getOutputStream();
-                        dos = new DataOutputStream(outputStream);
-
-                        dos.writeUTF(responseMessage.getString());
+//                        OutputStream outputStream = socket.getOutputStream();
+//                        dos = new DataOutputStream(outputStream);
+//
+//                        dos.writeUTF(responseMessage.getString());
+                        DHT.sendGlobalMessageResponse(responseMessage);
                         // Remaining send message
-                        outputStream.close();
-                        dos.close();
+//                        outputStream.close();
+//                        dos.close();
                         Log.i("GDUMP_QUERY_Res_Sent", responseMessage.getString());
                     }
                     else if(messageType.equals(GDUMP_QUERY_ANSWER)) {
@@ -982,7 +984,7 @@ public class SimpleDhtProvider extends ContentProvider {
                         String[] columnNames = {"key", "value"};
 
 
-                        String data = splittedMessage[1].split(":")[1];
+                        String data = splittedMessage[2].split(":")[1];
                         globalQueryResultReceived++;
 
                         Log.i("GDMP_QUERY_ANSWER","globalQueryResultReceived:: " + globalQueryResultReceived+ " PORTs:" +portNumbers.size());
@@ -1003,6 +1005,8 @@ public class SimpleDhtProvider extends ContentProvider {
                             MergeCursor mergeCursor = new MergeCursor(new Cursor[] { mCursor, cursor1 });
                             Log.i("SettingMergeCursor", "Set MergeCursor");
                             cursor = mergeCursor;   // Set main cursor of SIMPLEDHT to this mergedCursor
+
+                            globalQueryResultReceived++; // Now again increase here, so the while loop breaks
                         }
 
                     }
@@ -1119,6 +1123,14 @@ public class SimpleDhtProvider extends ContentProvider {
                 }
             }
         }
+    }
+
+    private void sendGlobalMessageResponse(Message responseMessage) {
+
+        String msg = GDUMP_QUERY_ANSWER;
+        String client = responseMessage.getQueryPort();
+        new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, client, responseMessage.getString());
+//        new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, sortedLookUpMap.get(target), keyToFind, myPortId);
     }
 
     private void getKeyValuePairs(String data) {
@@ -1288,6 +1300,26 @@ public class SimpleDhtProvider extends ContentProvider {
                         }
                     }
 
+                }
+                else if(order.equals(GDUMP_QUERY_ANSWER)) {
+                    String target = msgs[1];
+                    String responseMessage = msgs[2];
+                    Log.i("Send_Global_Response", "Sending Global Response To :  " + target);
+
+                    socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                            Integer.parseInt(target));
+
+                    stream = socket.getOutputStream();
+
+
+                    OutputStreamWriter out = new OutputStreamWriter(stream,
+                            "UTF-8");
+                    dos = new DataOutputStream(stream);
+
+                    dos.writeUTF(responseMessage);
+
+                    stream.flush();
+                    out.flush();
                 }
                 else if(order.equals(DELETE)) {
                     String target = msgs[1];
