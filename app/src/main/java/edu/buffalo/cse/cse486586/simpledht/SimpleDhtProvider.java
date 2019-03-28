@@ -5,6 +5,7 @@ import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.MatrixCursor;
+import android.database.MergeCursor;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -86,6 +87,10 @@ public class SimpleDhtProvider extends ContentProvider {
 
     private static final String KEY_FIELD = "key";
     private static final String VALUE_FIELD = "value";
+
+    public static int globalQueryResultReceived = 0;    // Variable which keeps map of how many AVD's have sent the result of QUERY_ALL message
+
+    public static HashMap<String, String> keyValuePairs = new HashMap<String, String>();
 
     public static Cursor cursor = null;
 
@@ -563,6 +568,14 @@ public class SimpleDhtProvider extends ContentProvider {
             // Get all the messages stored in entire DHT
             Log.i("QUERY-GDUMP", "Get all the messages stored in DHT");
             new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, GDUMP_QUERY, myPortId);
+            Log.i("Wait_Start", "globalQueryResultReceived:: " + globalQueryResultReceived);
+            while(globalQueryResultReceived != portNumbers.size()-1) {
+                // wait here
+            }
+            Log.i("Wait_Over", "globalQueryResultReceived:: " + globalQueryResultReceived);
+            globalQueryResultReceived = 0;
+            return cursor;
+
         }
         else {
             String keyToFind = selection;
@@ -612,7 +625,6 @@ public class SimpleDhtProvider extends ContentProvider {
             System.out.println(e.getStackTrace());
         }
         return cursor;
-
     }
 
     private void sendQuery(String keyToFind, String myPortId, String target) {
@@ -952,7 +964,7 @@ public class SimpleDhtProvider extends ContentProvider {
                             sb.append(",");
                             // key value,key value,key value
                         }
-
+                        Log.i("GDUMP_QUERY_Response", responseMessage.getString());
                         responseMessage.setGDUMP_Response(sb.toString());
                         OutputStream outputStream = socket.getOutputStream();
                         dos = new DataOutputStream(outputStream);
@@ -961,11 +973,37 @@ public class SimpleDhtProvider extends ContentProvider {
                         // Remaining send message
                         outputStream.close();
                         dos.close();
+                        Log.i("GDUMP_QUERY_Res_Sent", responseMessage.getString());
                     }
                     else if(messageType.equals(GDUMP_QUERY_ANSWER)) {
                         // Write this method
                         // Combine everyones anser and also call to getAllDataFromLocal to get its own keys and
                         // then return the result
+                        String[] columnNames = {"key", "value"};
+
+
+                        String data = splittedMessage[1].split(":")[1];
+                        globalQueryResultReceived++;
+
+                        Log.i("GDMP_QUERY_ANSWER","globalQueryResultReceived:: " + globalQueryResultReceived+ " PORTs:" +portNumbers.size());
+                        getKeyValuePairs(data);
+
+                        if(globalQueryResultReceived == portNumbers.size()-1) {
+                            //globalQueryResultReceived = 0;
+                            // Get All Data Of Current AVD
+                            Log.i("Match", "globalQueryResultReceived == portNumbers.size()-1");
+                            Cursor cursor1 = DHT.getAllDataFromLocal(mUri);
+                            MatrixCursor mCursor = new MatrixCursor(columnNames);
+
+                            for(String key : keyValuePairs.keySet()) {
+                                String[] columnValues = {key, keyValuePairs.get(key)};
+                                mCursor.addRow(columnValues);
+                            }
+                            // Now Merge the cursor and MatrixCursor
+                            MergeCursor mergeCursor = new MergeCursor(new Cursor[] { mCursor, cursor1 });
+                            Log.i("SettingMergeCursor", "Set MergeCursor");
+                            cursor = mergeCursor;   // Set main cursor of SIMPLEDHT to this mergedCursor
+                        }
 
                     }
                     else if(messageType.equals(DELETE)) {
@@ -1081,6 +1119,21 @@ public class SimpleDhtProvider extends ContentProvider {
                 }
             }
         }
+    }
+
+    private void getKeyValuePairs(String data) {
+
+
+        // key value,key value,key value
+        String[] pairs = data.split(",");
+        for(String pair : pairs) {
+            String key = pair.split(" ")[0];
+            String value = pair.split(" ")[1];
+            if(key.length()>0 && value.length()>0){
+                keyValuePairs.put(key, value);
+            }
+        }
+
     }
 
 
@@ -1231,6 +1284,7 @@ public class SimpleDhtProvider extends ContentProvider {
 
                             stream.flush();
                             out.flush();
+                            Log.i("Global_Message_Sent", client);
                         }
                     }
 
