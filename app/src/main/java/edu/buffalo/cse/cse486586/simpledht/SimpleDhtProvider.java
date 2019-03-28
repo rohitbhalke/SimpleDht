@@ -168,21 +168,22 @@ public class SimpleDhtProvider extends ContentProvider {
 
             // Suppose only one AVD is there in DHT
             Log.i("KEY_HASH", "key: "+ key+"  HashKey: "+hashOfKey);
-            if (selfPortHash.equals(successor) && selfPortHash.equals(predessor)) {
+            if ((selfPortHash.equals(successor) && selfPortHash.equals(predessor) || (predessor.equals("") && successor.equals("")))) {
                 return insertInLocalDb(uri, key, value);
             }
             else if (predessor.compareTo(selfPortHash)<0 && selfPortHash.compareTo(successor)<0){
                 // Middle Node
-                if(hashOfKey.compareTo(selfPortHash) < 0) {
-                    // Ask Predessor
-                    Log.i("SEND_INSERT", "ASK Predessor TO Take Care - Middle Node");
-                    String msg = "INSERT";
-                    new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(predessor));
-                }
-                else if(hashOfKey.compareTo(selfPortHash)>=0 && hashOfKey.compareTo(successor)<0){
+//                if(hashOfKey.compareTo(predessor) < 0) {
+//                    // Ask Predessor
+//                    Log.i("SEND_INSERT", "ASK Predessor TO Take Care - Middle Node");
+//                    String msg = "INSERT";
+//                    new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(predessor));
+//                }
+//                else
+                if(hashOfKey.compareTo(selfPortHash)<=0 && hashOfKey.compareTo(predessor)>0){
                     return insertInLocalDb(uri, key, value);
                 }
-                else if(hashOfKey.compareTo(successor)>0){
+                else {
                     // Ask Successor
                     Log.i("SEND_INSERT", "ASK Successor TO Take Care - Middle Node");
                     String msg = "INSERT";
@@ -190,14 +191,10 @@ public class SimpleDhtProvider extends ContentProvider {
                 }
             }
             else if(predessor.compareTo(selfPortHash)>0) {      // For First Node Of DHT
-                if(hashOfKey.compareTo(selfPortHash)<=0){
+                if(hashOfKey.compareTo(selfPortHash)<=0 || hashOfKey.compareTo(predessor)>0){
                     // ASK PREDESSOR TO TAKE CARE
 //                    String msg = "INSERT";
 //                    new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(predessor));
-                    return insertInLocalDb(uri, key, value);
-                }
-                else if(hashOfKey.compareTo(selfPortHash)>=0 && hashOfKey.compareTo(successor)<0) {
-                    // insert in local
                     return insertInLocalDb(uri, key, value);
                 }
                 else {
@@ -207,16 +204,16 @@ public class SimpleDhtProvider extends ContentProvider {
                     new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(successor));
                 }
             }
-            else if(selfPortHash.compareTo(successor)>0){
-                if(hashOfKey.compareTo(selfPortHash)>=0){
+            else if(selfPortHash.compareTo(successor)>0){   // Last Node
+                if(hashOfKey.compareTo(selfPortHash)<=0 && predessor.compareTo(hashOfKey)<0){
                     // Insert in local
                     return insertInLocalDb(uri, key, value);
                 }
-                else if(hashOfKey.compareTo(selfPortHash)<0){
-                    // ASK PREDESSOR
-                    String msg = "INSERT";
-                    new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(predessor));
-                }
+//                else if(hashOfKey.compareTo(selfPortHash)<0){
+//                    // ASK PREDESSOR
+//                    String msg = "INSERT";
+//                    new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(predessor));
+//                }
                 else {
                     // ASK SUCCESSOR
                     String msg = "INSERT";
@@ -273,20 +270,22 @@ public class SimpleDhtProvider extends ContentProvider {
             String predessorC = "PREDESSOR", successorC = "SUCCESSOR", own = "SELF";
 
             // Suppose only one AVD is there in DHT
-            if (selfPortHash.equals(successor) && selfPortHash.equals(predessor)) {
+            if ((selfPortHash.equals(successor) && selfPortHash.equals(predessor) || (predessor.equals("") && successor.equals("")))) {
                 return own;
             }
 
             // Middle Node
             if (predessor.compareTo(selfPortHash)<0 && selfPortHash.compareTo(successor)<0){
-                if(hashOfKey.compareTo(selfPortHash) < 0) {
-                    // Ask Predessor
-                    return predessorC;
-                }
-                else if(hashOfKey.compareTo(selfPortHash)>=0 && hashOfKey.compareTo(successor)<0){
+//                if(hashOfKey.compareTo(predessor) < 0) {
+//                    // Ask Predessor
+//                    return predessorC;
+//                }
+                //else
+                Log.i("MIDDLE_NODE_CONDITION", " Middle Node");
+                    if(hashOfKey.compareTo(selfPortHash)<=0 && hashOfKey.compareTo(predessor)>0){
                     return own;
                 }
-                else if(hashOfKey.compareTo(successor)>0){
+                else {
                     // Ask Successor
                     return successorC;
                 }
@@ -296,30 +295,32 @@ public class SimpleDhtProvider extends ContentProvider {
 //                    // ASK PREDESSOR TO TAKE CARE
 //                    return predessorC;
 //                }
-                if(hashOfKey.compareTo(selfPortHash)<=0){
+                Log.i("FIRST_NODE_CONDITION", " FIRST Node");
+                if(hashOfKey.compareTo(selfPortHash)<=0 || hashOfKey.compareTo(predessor)>0){
                     return own;
                 }
                 //else if(hashOfKey.compareTo(selfPortHash)>=0 && hashOfKey.compareTo(successor)<0) {
-                else if(hashOfKey.compareTo(selfPortHash)>=0 && hashOfKey.compareTo(successor)<0) {
-
-                    // insert in local
-                    return own;
-                }
+//                else if(hashOfKey.compareTo(selfPortHash)>=0 && hashOfKey.compareTo(successor)<0) {
+//
+//                    // insert in local
+//                    return own;
+//                }
                 else {
                     // ASK Successor TO Take Care
                     return successorC;
                 }
             }
             else if(selfPortHash.compareTo(successor)>0){   // For LAST NODE IN DHT
-                if(hashOfKey.compareTo(selfPortHash)>=0){
+                Log.i("LAST_NODE_CONDITION", " LAST Node");
+                if(hashOfKey.compareTo(selfPortHash)<=0 && predessor.compareTo(hashOfKey)<0){
                     // Insert in local
                     return own;
                 }
                 //else if(hashOfKey.compareTo(predessor)>0 && hashOfKey.compareTo(selfPortHash)<0){
-                else if(hashOfKey.compareTo(selfPortHash)<0){
-                    // ASK PREDESSOR
-                    return predessorC;
-                }
+//                else if(hashOfKey.compareTo(selfPortHash)<0){
+//                    // ASK PREDESSOR
+//                    return predessorC;
+//                }
                 else {
                     // ASK SUCCESSOR
                     return successorC;
@@ -338,8 +339,15 @@ public class SimpleDhtProvider extends ContentProvider {
         String fileContents = value;
         FileOutputStream outputStream;
 
+        String fileHashValue = "";
         try {
-            Log.i("CREATE_FILE", filename+"   "+ fileContents);
+            fileHashValue = genHash(filename);
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            Log.i("CREATE_FILE", filename+"   "+ fileContents +"  sha: " + fileHashValue);
             outputStream = currentContext.openFileOutput(filename, Context.MODE_PRIVATE);
             synchronized (outputStream){
                 outputStream.write(fileContents.getBytes());
@@ -451,9 +459,15 @@ public class SimpleDhtProvider extends ContentProvider {
             if(selection.equals(LDUMP) || selection.equals(GDUMP)) {
                 return getAllDataFromLocal(uri);
             }
+            else {
+                Log.i("QUERY-LOCAL-SEARCH", selection);
+                cursor = findInLocal(selection);
+                if(cursor != null){
+                    return cursor;
+                }
+            }
         }
-
-        if(selection.equals(LDUMP)){
+        else if(selection.equals(LDUMP)){
             Log.i("LOCAL_DUMP", "Querying Local Dump");
             return getAllDataFromLocal(uri);
         }
@@ -792,6 +806,10 @@ public class SimpleDhtProvider extends ContentProvider {
 //                            askSuccessorToInsertMessage(key, value);
 //                        }
                         String whereToInsert = DHT.whereCanInsert(key);
+                        if(whereToInsert == null){
+                            Log.i("whereToInsert", "null");
+                        }
+                        Log.i("whereToInsert", whereToInsert);
                         if(whereToInsert.equals("SELF")){
                             Log.i("INSERT_IN_LOCALDB", key + " : " + value);
                             DHT.insertInLocalDb(mUri, key, value);
