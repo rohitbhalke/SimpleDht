@@ -77,8 +77,12 @@ public class SimpleDhtProvider extends ContentProvider {
     public static final String LDUMP = "@";
     public static final String GDUMP = "*";
     public static final String QUERY = "QUERY";
+    public static final String DELETE = "DELETE";
+
     public static final String GDUMP_QUERY = "GLOBALQUERY";
     public static final String GDUMP_QUERY_ANSWER = "GLOBAL_QUERY_ANSWER";
+
+    public static final String GDUMP_DELETE = "GLOBALDELETE";
 
     private static final String KEY_FIELD = "key";
     private static final String VALUE_FIELD = "value";
@@ -97,8 +101,87 @@ public class SimpleDhtProvider extends ContentProvider {
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         // TODO Auto-generated method stub
+
+        String[] columnNames = {"key", "value"};
+        Log.i("QUERY_FOR_KEY", selection);
+        cursor = new MatrixCursor(columnNames);
+
+        String selfPortHash = null;
+        try {
+            selfPortHash = genHash(myPortId);
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+
+        if ((selfPortHash.equals(successor) && selfPortHash.equals(predessor) || (predessor.equals("") && successor.equals("")))) {
+            // For single AVD, it doesnt matter
+            Log.i("Single_AVD_DELETE", selection);
+            if(selection.equals(LDUMP) || selection.equals(GDUMP)) {
+                //return getAllDataFromLocal(uri);
+                deleteAllDataFromLocal(uri);
+            }
+            else {
+                Log.i("DELETE-LOCAL-KEY", selection);
+                deleteFileFromLocal(uri, selection);
+            }
+        }
+        else if(selection.equals(LDUMP)){
+            deleteAllDataFromLocal(uri);
+        }
+        else if(selection.equals(GDUMP)){
+            Log.i("DELETE-GDUMP", "Delete all the messages stored in DHT");
+            new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, GDUMP_DELETE, myPortId);
+        }
+        else {
+            String keyToFind = selection;
+            String where = whereCanInsert(keyToFind);
+            if(where.equals("PREDESSOR")){
+                // Send message to Predessor
+                Log.i("DELETE-PREDESSOR-SEARCH", keyToFind +"  " + sortedLookUpMap.get(predessor));
+                sendDeleteQuery(keyToFind, myPortId, predessor);
+            }
+            else if(where.equals("SUCCESSOR")){
+                // Send message to Successor
+                Log.i("DELETE-SUCCESSOR-SEARCH", keyToFind +"  " + sortedLookUpMap.get(successor));
+                sendDeleteQuery(keyToFind, myPortId, successor);
+            }
+            else if(where.equals("SELF")){
+                deleteFileFromLocal(uri, selection);
+            }
+        }
+
         return 0;
     }
+
+    private void sendDeleteQuery(String keyToFind, String myPortId, String target) {
+        String msg = DELETE;
+        new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, sortedLookUpMap.get(target), keyToFind, myPortId);
+
+    }
+
+    private void deleteAllDataFromLocal(Uri uri) {
+        File fileDirectory = currentContext.getFilesDir();
+        File[] listOfFiles = fileDirectory.listFiles();
+
+        for (int i = 0; i < listOfFiles.length; i++) {
+            File currentFile = listOfFiles[i];
+            currentFile.delete();
+        }
+    }
+
+    private void deleteFileFromLocal(Uri uri, String key) {
+        File fileDirectory = currentContext.getFilesDir();
+        File[] listOfFiles = fileDirectory.listFiles();
+
+        for (int i = 0; i < listOfFiles.length; i++) {
+            File currentFile = listOfFiles[i];
+            if(currentFile.getName().equals(key)) {
+                currentFile.delete();
+                break;
+            }
+        }
+    }
+
 
     @Override
     public String getType(Uri uri) {
@@ -875,6 +958,17 @@ public class SimpleDhtProvider extends ContentProvider {
                         // then return the result
 
                     }
+                    else if(messageType.equals(DELETE)) {
+                        Log.i("DELETE_SERVER", splittedMessage[1]);
+                        String keyToSearch = splittedMessage[2].split(":")[1];
+                        //queryGeneratedFrom = splittedMessage[3].split(":")[1];
+                        DHT.delete(mUri,keyToSearch, null);
+                    }
+                    else if(message.equals(GDUMP_DELETE)) {
+                        Log.i("DELETE_SERVER_ALL", "Delete all messages from local");
+                        DHT.deleteAllDataFromLocal(mUri);
+                    }
+
 
                 } catch (IOException e) {
                     Log.i("Server_Failed", "YE");
@@ -1130,6 +1224,58 @@ public class SimpleDhtProvider extends ContentProvider {
                         }
                     }
 
+                }
+                else if(order.equals(DELETE)) {
+                    String target = msgs[1];
+                    String keyToFind = msgs[2];
+                    String myPortId = msgs[3];
+
+                    Message message = new Message(DELETE);
+                    message.setAssociatedPort(myPortId);
+                    message.setKeyToSearch(keyToFind);
+
+
+                    Log.i("SEND_DELETE_MSG", msgs[1]);
+
+                    socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                            Integer.parseInt(target));
+                    socket.setSoTimeout(3000);
+                    stream = socket.getOutputStream();
+
+
+                    OutputStreamWriter out = new OutputStreamWriter(stream,
+                            "UTF-8");
+                    dos = new DataOutputStream(stream);
+
+                    dos.writeUTF(message.getString());
+
+                    stream.flush();
+                    out.flush();
+                }
+                else if(order.equals(GDUMP_DELETE)) {
+                    Message message =  new Message(GDUMP_DELETE);
+                    String queryPort = msgs[1];
+                    message.setQueryPort(queryPort);
+                    Log.i("SEND_GLOBAL_DELETE_MSG", msgs[1]);
+
+                    for(String client : lookUpMap.keySet()) {
+                        if(!client.equals(queryPort)) {
+                            socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                                    Integer.parseInt(client));
+                            socket.setSoTimeout(3000);
+                            stream = socket.getOutputStream();
+
+
+                            OutputStreamWriter out = new OutputStreamWriter(stream,
+                                    "UTF-8");
+                            dos = new DataOutputStream(stream);
+
+                            dos.writeUTF(message.getString());
+
+                            stream.flush();
+                            out.flush();
+                        }
+                    }
                 }
             }
             catch (UnknownHostException unknownHost){
