@@ -68,13 +68,15 @@ public class SimpleDhtProvider extends ContentProvider {
     static final int SERVER_PORT = 10000;
     HashMap<String, String> map = new HashMap<String, String>();
     public static String myPortId = "";
+    public static String mySocketId = "";
     public static String predessor = "";
     public static String successor = "";
     public static HashMap<String, String> lookUpMap = new HashMap<String, String>();    // PORT - HASH
     public static TreeMap<String, String> sortedLookUpMap = new TreeMap<String, String>();    // HASH - PORT
     public static ArrayList<String> portNumbers = new ArrayList<String>();
     public static PriorityQueue<String> queue = new PriorityQueue<String>();
-    public static String zeroAVD = "11108";
+    public static String zeroAVD = "5554";
+    public static String zeroAVDSocketId = "11108";
     public static final String LDUMP = "@";
     public static final String GDUMP = "*";
     public static final String QUERY = "QUERY";
@@ -223,7 +225,7 @@ public class SimpleDhtProvider extends ContentProvider {
                     return insertInLocalDb(uri, key, value);
                     else
                     {
-                        Log.i("SEND_INSERT", "ASK Successor TO Take Care - Middle Node");
+                        Log.i("SEND_INSERT", "ASK Successor TO Take Care - Middle Node::" + sortedLookUpMap.get(successor));
                         String msg = "INSERT";
                         new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(successor));
                     }
@@ -234,7 +236,7 @@ public class SimpleDhtProvider extends ContentProvider {
                         return insertInLocalDb(uri, key, value);
                     }
                     else{
-                        Log.i("SEND_INSERT", "ASK Successor TO Take Care - Middle Node");
+                        Log.i("SEND_INSERT", "ASK Successor TO Take Care - Middle Node " + sortedLookUpMap.get(successor));
                         String msg = "INSERT";
                         new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(successor));
                     }
@@ -255,7 +257,7 @@ public class SimpleDhtProvider extends ContentProvider {
                 }
                 else {
                     // Ask Successor
-                    Log.i("SEND_INSERT", "ASK Successor TO Take Care - Middle Node");
+                    Log.i("SEND_INSERT", "ASK Successor TO Take Care - Middle Node  " + sortedLookUpMap.get(successor));
                     String msg = "INSERT";
                     new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(successor));
                 }
@@ -471,13 +473,14 @@ public class SimpleDhtProvider extends ContentProvider {
 
         Log.i("BOOT_UP", portNumber);
         // If current port is zeroAVD add it in its lookUpMap
-        myPortId = portNumber;
-        if (portNumber.equals(zeroAVD)) {
+        myPortId = portStr;
+        mySocketId = portNumber;
+        if (myPortId.equals(zeroAVD)) {
             try {
                 Log.i("SEND_AWAKE_SIGNAL", myPortId);
                 String hash = genHash(zeroAVD);
-                lookUpMap.put(portNumber, hash);
-                sortedLookUpMap.put(hash, portNumber);
+                lookUpMap.put(myPortId, hash);
+                sortedLookUpMap.put(hash, mySocketId);
                 if(!queue.contains(hash)){
                     queue.offer(hash);
                 }
@@ -567,7 +570,7 @@ public class SimpleDhtProvider extends ContentProvider {
         else if(selection.equals(GDUMP)){
             // Get all the messages stored in entire DHT
             Log.i("QUERY-GDUMP", "Get all the messages stored in DHT");
-            new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, GDUMP_QUERY, myPortId);
+            new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, GDUMP_QUERY, mySocketId);
             Log.i("Wait_Start", "globalQueryResultReceived:: " + globalQueryResultReceived);
             while(globalQueryResultReceived != portNumbers.size()) {
                 // wait here
@@ -583,13 +586,13 @@ public class SimpleDhtProvider extends ContentProvider {
             if(where.equals("PREDESSOR")){
                 // Send message to Predessor
                 Log.i("QUERY-PREDESSOR-SEARCH", keyToFind +"  " + sortedLookUpMap.get(predessor));
-                sendQuery(keyToFind, myPortId, predessor);
+                sendQuery(keyToFind, mySocketId, predessor);
 
             }
             else if(where.equals("SUCCESSOR")){
                 // Send message to Successor
                 Log.i("QUERY-SUCCESSOR-SEARCH", keyToFind +"  " + sortedLookUpMap.get(successor));
-                sendQuery(keyToFind, myPortId, successor);
+                sendQuery(keyToFind, mySocketId, successor);
             }
             else if(where.equals("SELF")){
                 Log.i("QUERY-LOCAL-SEARCH", keyToFind);
@@ -673,7 +676,7 @@ public class SimpleDhtProvider extends ContentProvider {
             // Ask client to send the cursor as QUERY_ANSWER
                 String msg = "QUERY_ANSWER";
                 String value = messageReceived;
-                new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, queryGeneratedFrom, keyToFind, myPortId, value);
+                new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, queryGeneratedFrom, keyToFind, mySocketId, value);
                 queryGeneratedFrom = null;
             }
 
@@ -719,6 +722,15 @@ public class SimpleDhtProvider extends ContentProvider {
         return clients;
     }
 
+    private String[] getAllConnectedClientsSocketIds() {
+        int i=0;
+        String []clients = new String[lookUpMap.size()];
+        for(String key : lookUpMap.keySet()){
+            clients[i++] = String.valueOf(Integer.valueOf(key)*2);
+        }
+        return clients;
+    }
+
     private void updateLookUpMap(String clients){
         String[] clientList = clients.split(",");
         for(String client : clientList) {
@@ -726,7 +738,7 @@ public class SimpleDhtProvider extends ContentProvider {
                 try {
                     String hash = genHash(client);
                     lookUpMap.put(client, hash);
-                    sortedLookUpMap.put(hash,  client);
+                    sortedLookUpMap.put(hash,  String.valueOf(Integer.parseInt(client) * 2));
                     if(!queue.contains(hash)) {
                         queue.offer(hash);
                     }
@@ -856,7 +868,7 @@ public class SimpleDhtProvider extends ContentProvider {
                         try {
                             String hash = DHT.genHash(clientPortNumber);
                             lookUpMap.put(clientPortNumber, hash);
-                            sortedLookUpMap.put(hash, clientPortNumber);
+                            sortedLookUpMap.put(hash, String.valueOf(Integer.parseInt(clientPortNumber)*2));
                             if (!queue.contains(hash)) {
                                 queue.offer(hash);
                             }
@@ -875,9 +887,10 @@ public class SimpleDhtProvider extends ContentProvider {
                         Message broadCastMessage = new Message("BROADCAST");
                         broadCastMessage.setConnectedClients(connectedClients);
 
+                        String[] connectedClientsSockets = DHT.getAllConnectedClientsSocketIds();
                         OutputStream outputStream = null;
 
-                        for (String client : connectedClients) {
+                        for (String client : connectedClientsSockets) {
                             Socket newSocket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                                     Integer.parseInt(client));
                             outputStream = newSocket.getOutputStream();
@@ -983,12 +996,18 @@ public class SimpleDhtProvider extends ContentProvider {
                         // then return the result
                         String[] columnNames = {"key", "value"};
 
-
-                        String data = splittedMessage[2].split(":")[1];
+                        Log.i("Data_Received::", String.valueOf(splittedMessage.length));
                         globalQueryResultReceived++;
+                        if(splittedMessage.length>2 && splittedMessage[2].length()>0 && splittedMessage[2].indexOf(":")>=0) {
+                            String []responseString = splittedMessage[2].split(":");
+                            if(responseString.length>=2) {
+                                String data = responseString[1];
 
-                        Log.i("GDMP_QUERY_ANSWER","globalQueryResultReceived:: " + globalQueryResultReceived+ " PORTs:" +portNumbers.size());
-                        getKeyValuePairs(data);
+
+                                Log.i("GDMP_QUERY_ANSWER", "globalQueryResultReceived:: " + globalQueryResultReceived + " PORTs:" + portNumbers.size());
+                                getKeyValuePairs(data);
+                            }
+                        }
 
                         if(globalQueryResultReceived == portNumbers.size()-1) {
                             //globalQueryResultReceived = 0;
@@ -1166,7 +1185,7 @@ public class SimpleDhtProvider extends ContentProvider {
                 if (order.equals("NODE_JOIN")) {
                     String portNumber = msgs[1];
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                            Integer.parseInt(zeroAVD));
+                            Integer.parseInt(zeroAVDSocketId));
 
                     stream = socket.getOutputStream();
 
@@ -1206,7 +1225,7 @@ public class SimpleDhtProvider extends ContentProvider {
                     message.setKey(key);
                     message.setValue(value);
 
-                    Log.i("Sending_Key_Insert",key +"  :  " + value);
+                    Log.i("Sending_Key_Insert",key +"  :  " + value +":: to: "+client);
                     dos.writeUTF(message.getString());
 
                     stream.flush();
@@ -1278,9 +1297,13 @@ public class SimpleDhtProvider extends ContentProvider {
                     Message message =  new Message(GDUMP_QUERY);
                     String queryPort = msgs[1];
                     message.setQueryPort(queryPort);
+
+                    String querySocket = String.valueOf(Integer.parseInt(queryPort)*2);
+
                     Log.i("SEND_GLOBAL_QUERY_MSG", msgs[1]);
 
-                    for(String client : lookUpMap.keySet()) {
+                    for(String client : sortedLookUpMap.values()) {
+                        Log.i("Send_ForLoop", client+"   " + queryPort);
                         if(!client.equals(queryPort)) {
                             socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                                     Integer.parseInt(client));
@@ -1334,7 +1357,7 @@ public class SimpleDhtProvider extends ContentProvider {
                     Log.i("SEND_DELETE_MSG", msgs[1]);
 
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                            Integer.parseInt(target));
+                            Integer.parseInt(target)*2);
 
                     stream = socket.getOutputStream();
 
@@ -1354,7 +1377,9 @@ public class SimpleDhtProvider extends ContentProvider {
                     message.setQueryPort(queryPort);
                     Log.i("SEND_GLOBAL_DELETE_MSG", msgs[1]);
 
-                    for(String client : lookUpMap.keySet()) {
+                    String querySocket = String.valueOf(Integer.parseInt(queryPort)*2);
+
+                    for(String client : sortedLookUpMap.values()) {
                         if(!client.equals(queryPort)) {
                             socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                                     Integer.parseInt(client));
@@ -1375,7 +1400,7 @@ public class SimpleDhtProvider extends ContentProvider {
                 }
             }
             catch (UnknownHostException unknownHost){
-
+                Log.i("Unknown_host", "Unknown_host");
             }
             catch (IOException io){
                 System.out.println(io.getStackTrace());
