@@ -633,6 +633,7 @@ public class SimpleDhtProvider extends ContentProvider {
     private void sendQuery(String keyToFind, String myPortId, String target) {
 
         String msg = QUERY;
+
         new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, sortedLookUpMap.get(target), keyToFind, myPortId);
         //while()
         /*
@@ -1243,6 +1244,7 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     if(queryGeneratedFrom != null) {
                         message.setQueryPort(queryGeneratedFrom);
+                        queryGeneratedFrom = null;
                     }
                     else {
                         message.setQueryPort(myPortId);
