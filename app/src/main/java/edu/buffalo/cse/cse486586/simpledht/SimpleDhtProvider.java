@@ -47,18 +47,8 @@ import java.util.Random;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.TreeMap;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.PriorityBlockingQueue;
-
-
 import android.content.ContentProvider;
-import android.content.ContentResolver;
-import android.content.ContentValues;
-import android.content.Context;
 import android.database.Cursor;
-import android.net.Uri;
-import android.telephony.TelephonyManager;
-import android.util.Log;
 
 public class SimpleDhtProvider extends ContentProvider {
 
@@ -84,6 +74,11 @@ public class SimpleDhtProvider extends ContentProvider {
 
     public static final String GDUMP_QUERY = "GLOBALQUERY";
     public static final String GDUMP_QUERY_ANSWER = "GLOBAL_QUERY_ANSWER";
+
+    public static final String NODE_JOIN = "NODE_JOIN";
+    public static final String INSERT = "INSERT";
+    public static final String QUERY_ANSWER = "QUERY_ANSWER";
+    public static final String BROADCAST = "BROADCAST";
 
     public static final String GDUMP_DELETE = "GLOBALDELETE";
 
@@ -204,134 +199,16 @@ public class SimpleDhtProvider extends ContentProvider {
 
         Log.i("Insert_Query_Fired", key);
 
+        String whereToInsert = whereCanInsert(key);
 
-        // New Logic
-        try {
-            String hashOfKey = genHash(key);
-            String selfPortHash = genHash(myPortId);
-
-
-            // Suppose only one AVD is there in DHT
-            Log.i("KEY_HASH", "key: "+ key+"  HashKey: "+hashOfKey);
-            if ((selfPortHash.equals(successor) && selfPortHash.equals(predessor) || (predessor.equals("") && successor.equals("")))) {
-                return insertInLocalDb(uri, key, value);
-            }
-            else if(predessor.equals(successor)){
-                // For 2 AVD Condition
-                Log.i("Two_Node_Conditions", "For 2 Nodes Only");
-                if(predessor.compareTo(selfPortHash)>0){
-                    // For first Node
-                    if(selfPortHash.compareTo(hashOfKey)>=0 || predessor.compareTo(hashOfKey)<0)
-                    return insertInLocalDb(uri, key, value);
-                    else
-                    {
-                        Log.i("SEND_INSERT", "ASK Successor TO Take Care - Middle Node::" + sortedLookUpMap.get(successor));
-                        String msg = "INSERT";
-                        new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(successor));
-                    }
-                }
-                else {
-                    // For Last Node
-                    if(selfPortHash.compareTo(hashOfKey)>0 && hashOfKey.compareTo(predessor)>0){
-                        return insertInLocalDb(uri, key, value);
-                    }
-                    else{
-                        Log.i("SEND_INSERT", "ASK Successor TO Take Care - Middle Node " + sortedLookUpMap.get(successor));
-                        String msg = "INSERT";
-                        new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(successor));
-                    }
-                }
-
-            }
-            else if (predessor.compareTo(selfPortHash)<0 && selfPortHash.compareTo(successor)<0){
-                // Middle Node
-//                if(hashOfKey.compareTo(predessor) < 0) {
-//                    // Ask Predessor
-//                    Log.i("SEND_INSERT", "ASK Predessor TO Take Care - Middle Node");
-//                    String msg = "INSERT";
-//                    new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(predessor));
-//                }
-//                else
-                if(hashOfKey.compareTo(selfPortHash)<=0 && hashOfKey.compareTo(predessor)>0){
-                    return insertInLocalDb(uri, key, value);
-                }
-                else {
-                    // Ask Successor
-                    Log.i("SEND_INSERT", "ASK Successor TO Take Care - Middle Node  " + sortedLookUpMap.get(successor));
-                    String msg = "INSERT";
-                    new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(successor));
-                }
-            }
-            else if(predessor.compareTo(selfPortHash)>0) {      // For First Node Of DHT
-                if(hashOfKey.compareTo(selfPortHash)<=0 || hashOfKey.compareTo(predessor)>0){
-                    // ASK PREDESSOR TO TAKE CARE
-//                    String msg = "INSERT";
-//                    new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(predessor));
-                    return insertInLocalDb(uri, key, value);
-                }
-                else {
-                    // ASK Successor TO Take Care
-                    Log.i("SEND_INSERT", "ASK Successor TO Take Care - First Node");
-                    String msg = "INSERT";
-                    new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(successor));
-                }
-            }
-            else if(selfPortHash.compareTo(successor)>0){   // Last Node
-                if(hashOfKey.compareTo(selfPortHash)<=0 && predessor.compareTo(hashOfKey)<0){
-                    // Insert in local
-                    return insertInLocalDb(uri, key, value);
-                }
-//                else if(hashOfKey.compareTo(selfPortHash)<0){
-//                    // ASK PREDESSOR
-//                    String msg = "INSERT";
-//                    new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(predessor));
-//                }
-                else {
-                    // ASK SUCCESSOR
-                    String msg = "INSERT";
-                    new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(successor));
-                }
-            }
+        if(whereToInsert.equals("SELF")) {
+            return insertInLocalDb(uri, key, value);
         }
-        catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
+        else if(whereToInsert.equals("SUCCESSOR")) {
+            String msg = INSERT;
+            new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg,key, value, sortedLookUpMap.get(successor));
         }
-
         return null;
-    }
-
-    private boolean canInsertInLocalDB(String key) {
-        try {
-            String hashOfKey = genHash(key);
-            String selfPortHash = genHash(myPortId);
-
-            // Suppose only one AVD is there in DHT
-            if (selfPortHash.equals(successor) && selfPortHash.equals(predessor)) {
-                return true;
-            }
-
-
-            // if key's hash value is in between successor value and selfHashValue
-            if (hashOfKey.compareTo(successor) < 0 && hashOfKey.compareTo(selfPortHash) >= 0) {
-                return true;
-            }
-
-            if(selfPortHash.compareTo(hashOfKey)>=0 && predessor.compareTo(hashOfKey)>0){
-                return true;
-            }
-
-            /* if currentport is last port from the DHT then check
-                if hashOfKey is greater than currentPortHash and currentPortHash is less than successorPorthash
-                then insert into this lastAVD in the DHT
-             */
-
-            if (hashOfKey.compareTo(selfPortHash) >= 0 && selfPortHash.compareTo(successor) > 0) {
-                return true;
-            }
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        }
-        return false;
     }
 
     private String whereCanInsert(String key) {
@@ -348,11 +225,6 @@ public class SimpleDhtProvider extends ContentProvider {
 
             // Middle Node
             if (predessor.compareTo(selfPortHash)<0 && selfPortHash.compareTo(successor)<0){
-//                if(hashOfKey.compareTo(predessor) < 0) {
-//                    // Ask Predessor
-//                    return predessorC;
-//                }
-                //else
                 Log.i("MIDDLE_NODE_CONDITION", " Middle Node");
                     if(hashOfKey.compareTo(selfPortHash)<=0 && hashOfKey.compareTo(predessor)>0){
                     return own;
@@ -386,20 +258,11 @@ public class SimpleDhtProvider extends ContentProvider {
 
             }
             else if(predessor.compareTo(selfPortHash)>0) {      // For First Node Of DHT
-//                if(hashOfKey.compareTo(predessor)>0) {
-//                    // ASK PREDESSOR TO TAKE CARE
-//                    return predessorC;
-//                }
                 Log.i("FIRST_NODE_CONDITION", " FIRST Node");
                 if(hashOfKey.compareTo(selfPortHash)<=0 || hashOfKey.compareTo(predessor)>0){
                     return own;
                 }
-                //else if(hashOfKey.compareTo(selfPortHash)>=0 && hashOfKey.compareTo(successor)<0) {
-//                else if(hashOfKey.compareTo(selfPortHash)>=0 && hashOfKey.compareTo(successor)<0) {
-//
-//                    // insert in local
-//                    return own;
-//                }
+
                 else {
                     // ASK Successor TO Take Care
                     return successorC;
@@ -411,11 +274,7 @@ public class SimpleDhtProvider extends ContentProvider {
                     // Insert in local
                     return own;
                 }
-                //else if(hashOfKey.compareTo(predessor)>0 && hashOfKey.compareTo(selfPortHash)<0){
-//                else if(hashOfKey.compareTo(selfPortHash)<0){
-//                    // ASK PREDESSOR
-//                    return predessorC;
-//                }
+
                 else {
                     // ASK SUCCESSOR
                     return successorC;
@@ -473,8 +332,8 @@ public class SimpleDhtProvider extends ContentProvider {
 
         Log.i("BOOT_UP", portNumber);
         // If current port is zeroAVD add it in its lookUpMap
-        myPortId = portStr;
-        mySocketId = portNumber;
+        myPortId = portStr;         // Ex: 5554
+        mySocketId = portNumber;    // Ex: 11108
         if (myPortId.equals(zeroAVD)) {
             try {
                 Log.i("SEND_AWAKE_SIGNAL", myPortId);
@@ -496,32 +355,15 @@ public class SimpleDhtProvider extends ContentProvider {
 
 
         try {
-            /*
-             * Create a server socket as well as a thread (AsyncTask) that listens on the server
-             * port.
-             *
-             * AsyncTask is a simplified thread construct that Android provides. Please make sure
-             * you know how it works by reading
-             * http://developer.android.com/reference/android/os/AsyncTask.html
-             */
             ServerSocket serverSocket = new ServerSocket(SERVER_PORT);
-
             new ServerTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, serverSocket);
         } catch (IOException e) {
-            /*
-             * Log is a good way to debug your code. LogCat prints out all the messages that
-             * Log class writes.
-             *
-             * Please read http://developer.android.com/tools/debugging/debugging-projects.html
-             * and http://developer.android.com/tools/debugging/debugging-log.html
-             * for more information on debugging.
-             */
             Log.e(TAG, "Can't create a ServerSocket");
         }
 
         // If AVD is not 0, then send message to the AVD 0 indicating the arrival of new AVD join
         if(!myPortId.equals(zeroAVD)){
-            String msg = "NODE_JOIN";
+            String msg = NODE_JOIN;
             new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, myPortId);
         }
         return false;
@@ -675,7 +517,7 @@ public class SimpleDhtProvider extends ContentProvider {
             // Check whether the request was generated from anotherAVD
             if(queryGeneratedFrom != null ){
             // Ask client to send the cursor as QUERY_ANSWER
-                String msg = "QUERY_ANSWER";
+                String msg = QUERY_ANSWER;
                 String value = messageReceived;
                 new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, queryGeneratedFrom, keyToFind, mySocketId, value);
                 queryGeneratedFrom = null;
@@ -772,7 +614,7 @@ public class SimpleDhtProvider extends ContentProvider {
             order += p + "  ";
         }
 
-        Log.i("SORT_ORDER::  " , order);
+        //Log.i("SORT_ORDER::  " , order);
 
         int index = portNumbers.indexOf(myPortHash);
         int prevIndex = (index + portNumbers.size() - 1) % portNumbers.size();
@@ -783,50 +625,6 @@ public class SimpleDhtProvider extends ContentProvider {
 
         Log.i("MY_INFO", "My Port:  " + myPortId +"  MyPort Hash: " + myPortHash + "  Predessor Hash:  " + predessor + "  Successor Hash:  " + successor);
 
-        /*ArrayList<String> al = new ArrayList<String>();
-
-        while(!queue.isEmpty()) {
-            String current = queue.poll();
-            if(current.equals(myPortHash)){
-                al.add(current);
-                found = true;
-                break;
-            }
-            prev = current;
-            al.add(current);
-        }
-
-        if(found) {
-
-            if(prev.length()==0){
-                // set last value from the queue
-                String val = "";
-                while(!queue.isEmpty()){
-                    val = queue.poll();
-                }
-                if(val.length()>0){
-                    prev = val;
-                }
-                else {
-                    prev = myPortHash;
-                }
-            }
-
-
-            // now set next
-
-        }*/
-
-
-
-    }
-
-    private void printLookUpMap(){
-        String clients = "";
-        for(String client : lookUpMap.keySet()) {
-            clients += client + "  " + lookUpMap.get(client);
-        }
-        Log.i("LOOKUP_MAP", myPortId +"  " + clients +"  ");
     }
 
     private class ServerTask extends AsyncTask<ServerSocket, String, Void> {
@@ -863,7 +661,7 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     String messageType = splittedMessage[0].split(":")[1];
 
-                    if (messageType.equals("NODE_JOIN")) {
+                    if (messageType.equals(NODE_JOIN)) {
                         Log.i("UPDATE_LOOK_UP_MAP", splittedMessage[1]);
                         String clientPortNumber = splittedMessage[1].split(":")[1];
                         try {
@@ -885,7 +683,7 @@ public class SimpleDhtProvider extends ContentProvider {
                         // Now broadcast the lookupMap to all the connected AVDs
 
                         String[] connectedClients = DHT.getAllConnectedClients();
-                        Message broadCastMessage = new Message("BROADCAST");
+                        Message broadCastMessage = new Message(BROADCAST);
                         broadCastMessage.setConnectedClients(connectedClients);
 
                         String[] connectedClientsSockets = DHT.getAllConnectedClientsSocketIds();
@@ -907,23 +705,15 @@ public class SimpleDhtProvider extends ContentProvider {
                             newSocket.close();
                         }
 
-                    } else if (messageType.equals("BROADCAST")) {
+                    } else if (messageType.equals(BROADCAST)) {
                         Log.i("RECEIVED_BROADCAST_MSG", splittedMessage[1].split(":")[1]);
                         DHT.updateLookUpMap(splittedMessage[1].split(":")[1]);
-                        DHT.printLookUpMap();
                         DHT.updateSuccessorsAndPredessors();
-                    } else if (messageType.equals("INSERT")) {
+                    } else if (messageType.equals(INSERT)) {
                         Log.i("INSERT_REQUEST", splittedMessage[1].split(":")[1]);
                         String key = splittedMessage[1].split(":")[1];
                         String value = splittedMessage[2].split(":")[1];
-//                        if (DHT.canInsertInLocalDB(key)) {
-//                            Log.i("INSERT_IN_LOCALDB", key + " : " + value);
-//                            DHT.insertInLocalDb(mUri, key, value);
-//                        } else {
-//                            // Send message to Successor to insert this key
-//                            Log.i("ASKING_SUCER_TO_INSERT", key+" : " + value);
-//                            askSuccessorToInsertMessage(key, value);
-//                        }
+//
                         String whereToInsert = DHT.whereCanInsert(key);
                         if(whereToInsert == null){
                             Log.i("whereToInsert", "null");
@@ -932,10 +722,6 @@ public class SimpleDhtProvider extends ContentProvider {
                         if(whereToInsert.equals("SELF")){
                             Log.i("INSERT_IN_LOCALDB", key + " : " + value);
                             DHT.insertInLocalDb(mUri, key, value);
-                        }
-                        else if(whereToInsert.equals("PREDESSOR")){
-                            Log.i("ASKING_PREDSR_TO_INSERT", key+" : " + value);
-                            askPredessorInsertMessage(key, value);
                         }
                         else if(whereToInsert.equals("SUCCESSOR")){
                             Log.i("ASKING_PREDSR_TO_INSERT", key+" : " + value);
@@ -949,9 +735,9 @@ public class SimpleDhtProvider extends ContentProvider {
                         queryGeneratedFrom = splittedMessage[3].split(":")[1];
                         DHT.query(mUri, null, keyToSearch, null, null);
                     }
-                    else if(messageType.equals("QUERY_ANSWER")) {
+                    else if(messageType.equals(QUERY_ANSWER)) {
                         String keyToSearch = splittedMessage[1].split(":")[1];
-                        Log.i("QUERY_ANSWER", splittedMessage[2]);
+                        Log.i(QUERY_ANSWER, splittedMessage[2]);
                         String value = splittedMessage[2].split(":")[1];
                         String[] columnNames = {"key", "value"};
                         MatrixCursor cursor1 = new MatrixCursor(columnNames);
@@ -981,14 +767,7 @@ public class SimpleDhtProvider extends ContentProvider {
                         }
                         Log.i("GDUMP_QUERY_Response", responseMessage.getString());
                         responseMessage.setGDUMP_Response(sb.toString());
-//                        OutputStream outputStream = socket.getOutputStream();
-//                        dos = new DataOutputStream(outputStream);
-//
-//                        dos.writeUTF(responseMessage.getString());
                         DHT.sendGlobalMessageResponse(responseMessage);
-                        // Remaining send message
-//                        outputStream.close();
-//                        dos.close();
                         Log.i("GDUMP_QUERY_Res_Sent", responseMessage.getString());
                     }
                     else if(messageType.equals(GDUMP_QUERY_ANSWER)) {
@@ -1003,7 +782,6 @@ public class SimpleDhtProvider extends ContentProvider {
                             String []responseString = splittedMessage[2].split(":");
                             if(responseString.length>=2) {
                                 String data = responseString[1];
-
 
                                 Log.i("GDMP_QUERY_ANSWER", "globalQueryResultReceived:: " + globalQueryResultReceived + " PORTs:" + portNumbers.size());
                                 getKeyValuePairs(data);
@@ -1070,48 +848,7 @@ public class SimpleDhtProvider extends ContentProvider {
             InputStream stream = null;
 
             String successorPort = sortedLookUpMap.get(successor);
-            Message message = new Message("INSERT");
-            message.setKey(key);
-            message.setValue(value);
-            try {
-                newSocket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                        Integer.parseInt(successorPort));
-                outputStream = newSocket.getOutputStream();
-                OutputStreamWriter out = new OutputStreamWriter(outputStream,
-                        "UTF-8");
-
-                Log.i("SENDING_INSERT_MSG", "Sending to: " + successorPort + " " + message.getString());
-
-                dos = new DataOutputStream(outputStream);
-                dos.writeUTF(message.getString());
-                outputStream.close();
-                dos.close();
-                newSocket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                try {
-                    if (outputStream != null)
-                        outputStream.close();
-                    if (dos != null)
-                        dos.close();
-                    if (newSocket != null)
-                        newSocket.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        private void askPredessorInsertMessage(String key, String value) {
-
-            Socket newSocket = null;
-            OutputStream outputStream = null;
-            DataOutputStream dos = null;
-            InputStream stream = null;
-
-            String successorPort = sortedLookUpMap.get(predessor);
-            Message message = new Message("INSERT");
+            Message message = new Message(INSERT);
             message.setKey(key);
             message.setValue(value);
             try {
@@ -1154,8 +891,6 @@ public class SimpleDhtProvider extends ContentProvider {
     }
 
     private void getKeyValuePairs(String data) {
-
-
         // key value,key value,key value
         String[] pairs = data.split(",");
         for(String pair : pairs) {
@@ -1165,13 +900,10 @@ public class SimpleDhtProvider extends ContentProvider {
                 keyValuePairs.put(key, value);
             }
         }
-
     }
 
 
     private class ClientTask extends AsyncTask<String, Void, Void> {
-
-        //ArrayList<Message> proposedNumbers = new ArrayList<Message>();
 
         @Override
         protected Void doInBackground(String... msgs) {
@@ -1183,7 +915,7 @@ public class SimpleDhtProvider extends ContentProvider {
             DataInputStream dis = null;
 
             try {
-                if (order.equals("NODE_JOIN")) {
+                if (order.equals(NODE_JOIN)) {
                     String portNumber = msgs[1];
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(zeroAVDSocketId));
@@ -1195,7 +927,7 @@ public class SimpleDhtProvider extends ContentProvider {
                             "UTF-8");
                     dos = new DataOutputStream(stream);
 
-                    Message message = new Message("NODE_JOIN");
+                    Message message = new Message(NODE_JOIN);
                     message.setClient(portNumber);
 
                     Log.i("Sending_node_join_req","Sending_node_join_req");
@@ -1204,7 +936,7 @@ public class SimpleDhtProvider extends ContentProvider {
                     stream.flush();
                     out.flush();
                 }
-                else if(order.equals("INSERT")) {
+                else if(order.equals(INSERT)) {
                     Log.i("CLIENT_INSERT", "ORDER");
                     Log.i("CLIENT_INSERT", msgs[1]);
                     Log.i("CLIENT_INSERT", msgs[2]);
@@ -1222,7 +954,7 @@ public class SimpleDhtProvider extends ContentProvider {
                     OutputStreamWriter out = new OutputStreamWriter(stream,
                             "UTF-8");
                     dos = new DataOutputStream(stream);
-                    Message message = new Message("INSERT");
+                    Message message = new Message(INSERT);
                     message.setKey(key);
                     message.setValue(value);
 
@@ -1237,7 +969,7 @@ public class SimpleDhtProvider extends ContentProvider {
                     String keyToFind = msgs[2];
                     String myPortId = msgs[3];
 
-                    Message message = new Message("QUERY");
+                    Message message = new Message(QUERY);
                     message.setAssociatedPort(myPortId);
                     message.setKeyToSearch(keyToFind);
 
@@ -1267,8 +999,8 @@ public class SimpleDhtProvider extends ContentProvider {
                     out.flush();
 
                 }
-                else if(order.equals("QUERY_ANSWER")) {
-                    Message message = new Message("QUERY_ANSWER");
+                else if(order.equals(QUERY_ANSWER)) {
+                    Message message = new Message(QUERY_ANSWER);
 
                     Log.i("SEND_QUERY_MSG_ANSWER", msgs[1]);
 
@@ -1300,7 +1032,6 @@ public class SimpleDhtProvider extends ContentProvider {
                     String queryPort = msgs[1];
                     message.setQueryPort(queryPort);
 
-                    String querySocket = String.valueOf(Integer.parseInt(queryPort)*2);
 
                     Log.i("SEND_GLOBAL_QUERY_MSG", msgs[1]);
 
@@ -1379,7 +1110,6 @@ public class SimpleDhtProvider extends ContentProvider {
                     message.setQueryPort(queryPort);
                     Log.i("SEND_GLOBAL_DELETE_MSG", msgs[1]);
 
-                    String querySocket = String.valueOf(Integer.parseInt(queryPort)*2);
 
                     for(String client : sortedLookUpMap.values()) {
                         if(!client.equals(queryPort)) {
@@ -1422,12 +1152,7 @@ public class SimpleDhtProvider extends ContentProvider {
                     Log.e(TAG, "Error while disconnecting socket");
                 }
             }
-
-
             return null;
         }
     }
 }
-
-
-
