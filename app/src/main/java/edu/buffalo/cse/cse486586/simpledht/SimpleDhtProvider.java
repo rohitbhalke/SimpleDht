@@ -623,7 +623,6 @@ public class SimpleDhtProvider extends ContentProvider {
              */
             Socket socket = null;
             DataInputStream dis = null;
-            DataOutputStream dos = null;
             InputStream stream = null;
 
             while (true) {
@@ -631,7 +630,6 @@ public class SimpleDhtProvider extends ContentProvider {
                     socket = serverSocket.accept();
                     stream = socket.getInputStream();
 
-                    InputStreamReader inputStream = new InputStreamReader(stream);
                     dis = new DataInputStream(stream);
                     //BufferedReader br = new BufferedReader(inputStream);
                     String messageReceived = "";
@@ -671,21 +669,22 @@ public class SimpleDhtProvider extends ContentProvider {
                         OutputStream outputStream = null;
 
                         for (String client : connectedClientsSockets) {
-                            Socket newSocket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                                    Integer.parseInt(client));
-                            newSocket.setTcpNoDelay(true);
-                            newSocket.setSoTimeout(1000);
-                            outputStream = newSocket.getOutputStream();
-                            OutputStreamWriter out = new OutputStreamWriter(outputStream,
-                                    "UTF-8");
-
-                            Log.i("SENDING_BROADCAST_MSG", "Sending to: " + client + " " + broadCastMessage.getString());
-
-                            dos = new DataOutputStream(outputStream);
-                            dos.writeUTF(broadCastMessage.getString());
-                            outputStream.close();
-                            dos.close();
-                            newSocket.close();
+//                            Socket newSocket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+//                                    Integer.parseInt(client));
+//                            newSocket.setTcpNoDelay(true);
+//                            newSocket.setSoTimeout(1000);
+//                            outputStream = newSocket.getOutputStream();
+//                            OutputStreamWriter out = new OutputStreamWriter(outputStream,
+//                                    "UTF-8");
+//
+//                            Log.i("SENDING_BROADCAST_MSG", "Sending to: " + client + " " + broadCastMessage.getString());
+//
+//                            dos = new DataOutputStream(outputStream);
+//                            dos.writeUTF(broadCastMessage.getString());
+//                            outputStream.close();
+//                            dos.close();
+//                            newSocket.close();
+                            DHT.sendBroadCastMessage(broadCastMessage.getString(), client);
                         }
 
                     } else if (messageType.equals(BROADCAST)) {
@@ -707,8 +706,9 @@ public class SimpleDhtProvider extends ContentProvider {
                             DHT.insertInLocalDb(mUri, key, value);
                         }
                         else if(whereToInsert.equals("SUCCESSOR")){
-                            Log.i("ASKING_PREDSR_TO_INSERT", key+" : " + value);
-                            askSuccessorToInsertMessage(key, value);
+                            Log.i("ASKING_SUCCER_TO_INSERT", key+" : " + value);
+                            //askSuccessorToInsertMessage(key, value);
+                            DHT.askSuccessorToInsertMessage(key, value);
                         }
                     }
                     else if(messageType.equals(QUERY)) {
@@ -759,7 +759,7 @@ public class SimpleDhtProvider extends ContentProvider {
                     }
                     else if(messageType.equals(GDUMP_QUERY_ANSWER)) {
                         // Write this method
-                        // Combine everyones anser and also call to getAllDataFromLocal to get its own keys and
+                        // Combine everyones answer and also call to getAllDataFromLocal to get its own keys and
                         // then return the result
                         String[] columnNames = {"key", "value"};
 
@@ -832,7 +832,7 @@ public class SimpleDhtProvider extends ContentProvider {
             }
         }
 
-        private void askSuccessorToInsertMessage(String key, String value) {
+        /*private void askSuccessorToInsertMessage(String key, String value) {
 
             Socket newSocket = null;
             OutputStream outputStream = null;
@@ -873,7 +873,16 @@ public class SimpleDhtProvider extends ContentProvider {
                     e.printStackTrace();
                 }
             }
-        }
+        }*/
+    }
+
+    private void askSuccessorToInsertMessage(String key, String value) {
+        String successorPort = sortedLookUpMap.get(successor);
+        new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, INSERT,key, value, successorPort);
+    }
+
+    private void sendBroadCastMessage(String broadCastMessage, String clientPort) {
+        new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, BROADCAST,broadCastMessage, clientPort);
     }
 
     private void ForwardGlobalMessageToSUccessor(String queryPort) {
@@ -889,7 +898,6 @@ public class SimpleDhtProvider extends ContentProvider {
         String msg = GDUMP_QUERY_ANSWER;
         String client = responseMessage.getQueryPort();
         new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, client, responseMessage.getString());
-//        new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, sortedLookUpMap.get(target), keyToFind, myPortId);
     }
 
     private void getKeyValuePairs(String data) {
@@ -921,11 +929,8 @@ public class SimpleDhtProvider extends ContentProvider {
                     String portNumber = msgs[1];
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(zeroAVDSocketId));
-                    socket.setTcpNoDelay(true);
-                    socket.setSoTimeout(1000);
 
                     stream = socket.getOutputStream();
-
 
                     OutputStreamWriter out = new OutputStreamWriter(stream,
                             "UTF-8");
@@ -940,6 +945,23 @@ public class SimpleDhtProvider extends ContentProvider {
                     stream.flush();
                     out.flush();
                 }
+                else if(order.equals(BROADCAST)){
+                    String broadCastMessage = msgs[1];
+                    String client = msgs[2];
+                             socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                                    Integer.parseInt(client));
+
+                    stream = socket.getOutputStream();
+                    OutputStreamWriter out = new OutputStreamWriter(stream,
+                            "UTF-8");
+
+                    Log.i("SENDING_BROADCAST_MSG", "Sending to: " + client + " " + broadCastMessage);
+
+                    dos = new DataOutputStream(stream);
+                    dos.writeUTF(broadCastMessage);
+                    stream.flush();
+                    out.flush();
+                }
                 else if(order.equals(INSERT)) {
                     Log.i("CLIENT_INSERT", "ORDER");
                     Log.i("CLIENT_INSERT", msgs[1]);
@@ -951,8 +973,6 @@ public class SimpleDhtProvider extends ContentProvider {
                     String value = msgs[2];
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(client));
-                    socket.setTcpNoDelay(true);
-                    socket.setSoTimeout(1000);
 
                     stream = socket.getOutputStream();
 
@@ -991,8 +1011,6 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(target));
-                    socket.setTcpNoDelay(true);
-                    socket.setSoTimeout(1000);
 
                     stream = socket.getOutputStream();
 
@@ -1021,8 +1039,6 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(target));
-                    socket.setTcpNoDelay(true);
-                    socket.setSoTimeout(1000);
 
                     stream = socket.getOutputStream();
 
@@ -1067,8 +1083,6 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(successorSocketId));
-                    socket.setTcpNoDelay(true);
-                    socket.setSoTimeout(1000);
 
                     stream = socket.getOutputStream();
 
@@ -1082,8 +1096,6 @@ public class SimpleDhtProvider extends ContentProvider {
                     stream.flush();
                     out.flush();
                     Log.i("Global_Message_Sent", successorSocketId);
-
-
                 }
                 else if(order.equals(GDUMP_QUERY_ANSWER)) {
                     String target = msgs[1];
@@ -1092,8 +1104,6 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(target));
-                    socket.setTcpNoDelay(true);
-                    socket.setSoTimeout(1000);
 
                     stream = socket.getOutputStream();
 
@@ -1121,8 +1131,6 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(target)*2);
-                    socket.setTcpNoDelay(true);
-                    socket.setSoTimeout(1000);
 
                     stream = socket.getOutputStream();
 
@@ -1148,8 +1156,7 @@ public class SimpleDhtProvider extends ContentProvider {
                     String successorSocketId = sortedLookUpMap.get(successor);
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(successorSocketId));
-                    socket.setTcpNoDelay(true);
-                    socket.setSoTimeout(1000);
+
                     Log.i("SUCCESSOR_DELETE", "Send Message To "+ successorSocketId);
                     stream = socket.getOutputStream();
 
