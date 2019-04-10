@@ -6,6 +6,16 @@ public class Message {
     private String client =null;
     private String uri =null;
     private String queryPort = null;
+
+    public String getCurrentPort() {
+        return currentPort;
+    }
+
+    public void setCurrentPort(String currentPort) {
+        this.currentPort = currentPort;
+    }
+
+    private String currentPort = null;
     private String keyToSearch = null, associatedPort=null;
 
     private String GDUMP_Response = null;
@@ -171,6 +181,10 @@ public class Message {
         }
         if(this.GDUMP_Response !=  null) {
             sb.append("gdumpAnswer:" + this.GDUMP_Response);
+            sb.append(";");
+        }
+        if(this.currentPort != null) {
+            sb.append("currentPort:" + this.currentPort);
             sb.append(";");
         }
         return sb.toString();

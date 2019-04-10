@@ -1,6 +1,5 @@
 package edu.buffalo.cse.cse486586.simpledht;
 
-import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -8,18 +7,14 @@ import android.database.MatrixCursor;
 import android.database.MergeCursor;
 import android.net.Uri;
 import android.os.AsyncTask;
-import android.os.Bundle;
 import android.telephony.TelephonyManager;
-import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
-import android.text.method.ScrollingMovementMethod;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
 import java.util.Collections;
 import java.util.Formatter;
 import java.util.HashMap;
@@ -29,23 +24,15 @@ import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.DataInputStream;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.OutputStream;
 import java.net.InetAddress;
-import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.PriorityQueue;
-import java.util.Random;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.TreeMap;
 import android.content.ContentProvider;
 import android.database.Cursor;
@@ -132,6 +119,7 @@ public class SimpleDhtProvider extends ContentProvider {
         }
         else if(selection.equals(GDUMP)){
             Log.i("DELETE-GDUMP", "Delete all the messages stored in DHT");
+            deleteAllDataFromLocal(uri);    // First delete local
             new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, GDUMP_DELETE, myPortId);
         }
         else {
@@ -324,7 +312,8 @@ public class SimpleDhtProvider extends ContentProvider {
 
 
         mContentResolver = currentContext.getContentResolver();
-        mUri = buildUri("content", "content://edu.buffalo.cse.cse486586.simpledht.provider");
+
+        mUri = buildUri("content", "edu.buffalo.cse.cse486586.simpledht.provider");
 
         TelephonyManager tel = (TelephonyManager) currentContext.getSystemService(Context.TELEPHONY_SERVICE);
         String portStr = tel.getLine1Number().substring(tel.getLine1Number().length() - 4);
@@ -477,14 +466,6 @@ public class SimpleDhtProvider extends ContentProvider {
         String msg = QUERY;
 
         new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, sortedLookUpMap.get(target), keyToFind, myPortId);
-        //while()
-        /*
-                    Things remainining
-                    1) Now how do the query generator port know to wait for the Cursor to return from
-                    ServerTask. ( Right now it is getting returned from Query method, we need a
-                    machanism to stop execution here, till cursor is set from server task)
-
-         */
 
         Log.i("Boolean_Values_Before", "thisIsAnotherAVDSQuery:: "+ thisIsAnotherAVDSQuery +"   waitTillQueryResult:" + waitTillQueryResult);
         if(!thisIsAnotherAVDSQuery) {
@@ -692,6 +673,8 @@ public class SimpleDhtProvider extends ContentProvider {
                         for (String client : connectedClientsSockets) {
                             Socket newSocket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                                     Integer.parseInt(client));
+                            newSocket.setTcpNoDelay(true);
+                            newSocket.setSoTimeout(1000);
                             outputStream = newSocket.getOutputStream();
                             OutputStreamWriter out = new OutputStreamWriter(outputStream,
                                     "UTF-8");
@@ -750,25 +733,29 @@ public class SimpleDhtProvider extends ContentProvider {
                     }
                     else if(messageType.equals(GDUMP_QUERY)) {
                         String queryPort = splittedMessage[1].split(":")[1];
-                        Cursor cursor1 = DHT.getAllDataFromLocal(mUri);
-                        int keyIndex = cursor1.getColumnIndex(KEY_FIELD);
-                        int valueIndex = cursor1.getColumnIndex(VALUE_FIELD);
+                        if(!queryPort.equals(myPortId)){
+                            Cursor cursor1 = DHT.getAllDataFromLocal(mUri);
+                            int keyIndex = cursor1.getColumnIndex(KEY_FIELD);
+                            int valueIndex = cursor1.getColumnIndex(VALUE_FIELD);
 
-                        Message responseMessage = new Message(GDUMP_QUERY_ANSWER);
-                        responseMessage.setQueryPort(queryPort);
-                        StringBuilder sb = new StringBuilder();
+                            Message responseMessage = new Message(GDUMP_QUERY_ANSWER);
+                            responseMessage.setQueryPort(queryPort);
+                            StringBuilder sb = new StringBuilder();
 
-                        while(cursor1.moveToNext()) {
-                            sb.append(cursor1.getString(keyIndex));
-                            sb.append(" ");
-                            sb.append(cursor1.getString(valueIndex));
-                            sb.append(",");
-                            // key value,key value,key value
+                            while(cursor1.moveToNext()) {
+                                sb.append(cursor1.getString(keyIndex));
+                                sb.append(" ");
+                                sb.append(cursor1.getString(valueIndex));
+                                sb.append(",");
+                                // key value,key value,key value
+                            }
+                            Log.i("GDUMP_QUERY_Response", responseMessage.getString());
+                            responseMessage.setGDUMP_Response(sb.toString());
+                            DHT.sendGlobalMessageResponse(responseMessage);
+                            DHT.ForwardGlobalMessageToSUccessor(queryPort);
+                            Log.i("GDUMP_QUERY_Res_Sent", responseMessage.getString());
                         }
-                        Log.i("GDUMP_QUERY_Response", responseMessage.getString());
-                        responseMessage.setGDUMP_Response(sb.toString());
-                        DHT.sendGlobalMessageResponse(responseMessage);
-                        Log.i("GDUMP_QUERY_Res_Sent", responseMessage.getString());
+
                     }
                     else if(messageType.equals(GDUMP_QUERY_ANSWER)) {
                         // Write this method
@@ -816,26 +803,31 @@ public class SimpleDhtProvider extends ContentProvider {
                     }
                     else if(message.equals(GDUMP_DELETE)) {
                         Log.i("DELETE_SERVER_ALL", "Delete all messages from local");
-                        DHT.deleteAllDataFromLocal(mUri);
-                    }
+                        String queryPortId = splittedMessage[1].split(":")[1];
 
+                        DHT.deleteAllDataFromLocal(mUri);
+                        Log.i("PORT_IDS", "MyPortId::"+myPortId+"  QueryPort: "+ queryPortId);
+                        if(!queryPortId.equals(myPortId)){
+                            // ASk my successor to delete their all queries
+                            DHT.askSuccessorToDeleteItsOwnRecords();
+                        }
+                    }
 
                 } catch (IOException e) {
                     Log.i("Server_Failed", "YE");
                     Log.e(TAG, "Client Disconnected");
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    Log.e(TAG, "Failed to accept connection");
                 }
-                try {
-                    if (stream != null)
-                        stream.close();
-                    if (dis != null)
-                        dis.close();
-                    if (dos != null)
-                        dos.close();
-                    if (socket != null)
-                        socket.close();
+                finally {
+                    try {
+                        if (socket != null)
+                            socket.close();
 
-                } catch (IOException e) {
-                    Log.e(TAG, "Error while disconnecting socket");
+                    } catch (IOException e) {
+                        Log.e(TAG, "Error while disconnecting socket");
+                    }
                 }
             }
         }
@@ -854,6 +846,8 @@ public class SimpleDhtProvider extends ContentProvider {
             try {
                 newSocket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                         Integer.parseInt(successorPort));
+                newSocket.setTcpNoDelay(true);
+                newSocket.setSoTimeout(1000);
                 outputStream = newSocket.getOutputStream();
                 OutputStreamWriter out = new OutputStreamWriter(outputStream,
                         "UTF-8");
@@ -880,6 +874,14 @@ public class SimpleDhtProvider extends ContentProvider {
                 }
             }
         }
+    }
+
+    private void ForwardGlobalMessageToSUccessor(String queryPort) {
+        new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, GDUMP_QUERY, mySocketId, queryPort);
+    }
+
+    private void askSuccessorToDeleteItsOwnRecords() {
+        new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, GDUMP_DELETE, myPortId);
     }
 
     private void sendGlobalMessageResponse(Message responseMessage) {
@@ -919,6 +921,8 @@ public class SimpleDhtProvider extends ContentProvider {
                     String portNumber = msgs[1];
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(zeroAVDSocketId));
+                    socket.setTcpNoDelay(true);
+                    socket.setSoTimeout(1000);
 
                     stream = socket.getOutputStream();
 
@@ -947,6 +951,8 @@ public class SimpleDhtProvider extends ContentProvider {
                     String value = msgs[2];
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(client));
+                    socket.setTcpNoDelay(true);
+                    socket.setSoTimeout(1000);
 
                     stream = socket.getOutputStream();
 
@@ -985,6 +991,8 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(target));
+                    socket.setTcpNoDelay(true);
+                    socket.setSoTimeout(1000);
 
                     stream = socket.getOutputStream();
 
@@ -1013,6 +1021,8 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(target));
+                    socket.setTcpNoDelay(true);
+                    socket.setSoTimeout(1000);
 
                     stream = socket.getOutputStream();
 
@@ -1029,32 +1039,50 @@ public class SimpleDhtProvider extends ContentProvider {
                 }
                 else if(order.equals(GDUMP_QUERY)) {
                     Message message =  new Message(GDUMP_QUERY);
-                    String queryPort = msgs[1];
-                    message.setQueryPort(queryPort);
+                    String queryPort;
 
+
+                    String currentPort = msgs[1]; // SocketId
+                    message.setCurrentPort(currentPort);
+
+
+                    if(msgs.length>2) {
+                        // Means forward message, as the GDUMP is issued by diff AVD, so that AVD's port Id should be there
+                        // in the message
+                        queryPort = msgs[2];
+                        message.setQueryPort(queryPort);
+                    }
+                    else {
+                        // current port is the query port, means this AVD has issued GDUMP
+                        queryPort = currentPort;
+                        message.setQueryPort(queryPort);
+                    }
 
                     Log.i("SEND_GLOBAL_QUERY_MSG", msgs[1]);
 
-                    for(String client : sortedLookUpMap.values()) {
-                        Log.i("Send_ForLoop", client+"   " + queryPort);
-                        if(!client.equals(queryPort)) {
-                            socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                                    Integer.parseInt(client));
 
-                            stream = socket.getOutputStream();
+                    String successorSocketId = sortedLookUpMap.get(successor);
+
+                    Log.i("Port_info", "MyPOrt : " + mySocketId + " MySuccessor: " + successorSocketId);
+
+                    socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                            Integer.parseInt(successorSocketId));
+                    socket.setTcpNoDelay(true);
+                    socket.setSoTimeout(1000);
+
+                    stream = socket.getOutputStream();
 
 
-                            OutputStreamWriter out = new OutputStreamWriter(stream,
-                                    "UTF-8");
-                            dos = new DataOutputStream(stream);
+                    OutputStreamWriter out = new OutputStreamWriter(stream,
+                            "UTF-8");
+                    dos = new DataOutputStream(stream);
 
-                            dos.writeUTF(message.getString());
+                    dos.writeUTF(message.getString());
 
-                            stream.flush();
-                            out.flush();
-                            Log.i("Global_Message_Sent", client);
-                        }
-                    }
+                    stream.flush();
+                    out.flush();
+                    Log.i("Global_Message_Sent", successorSocketId);
+
 
                 }
                 else if(order.equals(GDUMP_QUERY_ANSWER)) {
@@ -1064,6 +1092,8 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(target));
+                    socket.setTcpNoDelay(true);
+                    socket.setSoTimeout(1000);
 
                     stream = socket.getOutputStream();
 
@@ -1091,6 +1121,8 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(target)*2);
+                    socket.setTcpNoDelay(true);
+                    socket.setSoTimeout(1000);
 
                     stream = socket.getOutputStream();
 
@@ -1110,25 +1142,26 @@ public class SimpleDhtProvider extends ContentProvider {
                     message.setQueryPort(queryPort);
                     Log.i("SEND_GLOBAL_DELETE_MSG", msgs[1]);
 
+                    // sortedLookUp Hash-SocketID
+                    //LOokup portId - Hash
 
-                    for(String client : sortedLookUpMap.values()) {
-                        if(!client.equals(queryPort)) {
-                            socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                                    Integer.parseInt(client));
+                    String successorSocketId = sortedLookUpMap.get(successor);
+                    socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
+                            Integer.parseInt(successorSocketId));
+                    socket.setTcpNoDelay(true);
+                    socket.setSoTimeout(1000);
+                    Log.i("SUCCESSOR_DELETE", "Send Message To "+ successorSocketId);
+                    stream = socket.getOutputStream();
 
-                            stream = socket.getOutputStream();
 
+                    OutputStreamWriter out = new OutputStreamWriter(stream,
+                            "UTF-8");
+                    dos = new DataOutputStream(stream);
 
-                            OutputStreamWriter out = new OutputStreamWriter(stream,
-                                    "UTF-8");
-                            dos = new DataOutputStream(stream);
+                    dos.writeUTF(message.getString());
 
-                            dos.writeUTF(message.getString());
-
-                            stream.flush();
-                            out.flush();
-                        }
-                    }
+                    stream.flush();
+                    out.flush();
                 }
             }
             catch (UnknownHostException unknownHost){
