@@ -92,7 +92,6 @@ public class SimpleDhtProvider extends ContentProvider {
         // TODO Auto-generated method stub
 
         String[] columnNames = {"key", "value"};
-        Log.i("DELETE_FOR_KEY", selection);
         cursor = new MatrixCursor(columnNames);
 
         String selfPortHash = null;
@@ -104,13 +103,11 @@ public class SimpleDhtProvider extends ContentProvider {
 
         if ((selfPortHash.equals(successor) && selfPortHash.equals(predessor) || (predessor.equals("") && successor.equals("")))) {
             // For single AVD, it doesnt matter
-            Log.i("Single_AVD_DELETE", selection);
             if(selection.equals(LDUMP) || selection.equals(GDUMP)) {
                 //return getAllDataFromLocal(uri);
                 deleteAllDataFromLocal(uri);
             }
             else {
-                Log.i("DELETE-LOCAL-KEY", selection);
                 deleteFileFromLocal(uri, selection);
             }
         }
@@ -118,7 +115,6 @@ public class SimpleDhtProvider extends ContentProvider {
             deleteAllDataFromLocal(uri);
         }
         else if(selection.equals(GDUMP)){
-            Log.i("DELETE-GDUMP", "Delete all the messages stored in DHT");
             deleteAllDataFromLocal(uri);    // First delete local
             new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, GDUMP_DELETE, myPortId);
         }
@@ -127,12 +123,10 @@ public class SimpleDhtProvider extends ContentProvider {
             String where = whereCanInsert(keyToFind);
             if(where.equals("PREDESSOR")){
                 // Send message to Predessor
-                Log.i("DELETE-PREDESSOR-SEARCH", keyToFind +"  " + sortedLookUpMap.get(predessor));
                 sendDeleteQuery(keyToFind, myPortId, predessor);
             }
             else if(where.equals("SUCCESSOR")){
                 // Send message to Successor
-                Log.i("DELETE-SUCCESSOR-SEARCH", keyToFind +"  " + sortedLookUpMap.get(successor));
                 sendDeleteQuery(keyToFind, myPortId, successor);
             }
             else if(where.equals("SELF")){
@@ -184,9 +178,6 @@ public class SimpleDhtProvider extends ContentProvider {
         // TODO Auto-generated method stub
         String key = (String)values.get("key");
         String value = (String) values.get("value");
-
-        Log.i("Insert_Query_Fired", key);
-
         String whereToInsert = whereCanInsert(key);
 
         if(whereToInsert.equals("SELF")) {
@@ -203,7 +194,6 @@ public class SimpleDhtProvider extends ContentProvider {
         try {
             String hashOfKey = genHash(key);
             String selfPortHash = genHash(myPortId);
-            Log.i("KEY_HASH_VALUES", "key:  "+key+"  hashOfKey:  "+hashOfKey);
             String predessorC = "PREDESSOR", successorC = "SUCCESSOR", own = "SELF";
 
             // Suppose only one AVD is there in DHT
@@ -213,7 +203,6 @@ public class SimpleDhtProvider extends ContentProvider {
 
             // Middle Node
             if (predessor.compareTo(selfPortHash)<0 && selfPortHash.compareTo(successor)<0){
-                Log.i("MIDDLE_NODE_CONDITION", " Middle Node");
                     if(hashOfKey.compareTo(selfPortHash)<=0 && hashOfKey.compareTo(predessor)>0){
                     return own;
                 }
@@ -224,7 +213,6 @@ public class SimpleDhtProvider extends ContentProvider {
             }
             else if(predessor.equals(successor)){
                 // For 2 AVD Condition
-                Log.i("Two_Node_Conditions", "For 2 Nodes Only");
                 if(predessor.compareTo(selfPortHash)>0){
                     // For first Node
                     if(selfPortHash.compareTo(hashOfKey)>=0 || predessor.compareTo(hashOfKey)<0)
@@ -246,23 +234,19 @@ public class SimpleDhtProvider extends ContentProvider {
 
             }
             else if(predessor.compareTo(selfPortHash)>0) {      // For First Node Of DHT
-                Log.i("FIRST_NODE_CONDITION", " FIRST Node");
                 if(hashOfKey.compareTo(selfPortHash)<=0 || hashOfKey.compareTo(predessor)>0){
                     return own;
                 }
-
                 else {
                     // ASK Successor TO Take Care
                     return successorC;
                 }
             }
             else if(selfPortHash.compareTo(successor)>0){   // For LAST NODE IN DHT
-                Log.i("LAST_NODE_CONDITION", " LAST Node");
                 if(hashOfKey.compareTo(selfPortHash)<=0 && predessor.compareTo(hashOfKey)<0){
                     // Insert in local
                     return own;
                 }
-
                 else {
                     // ASK SUCCESSOR
                     return successorC;
@@ -289,7 +273,6 @@ public class SimpleDhtProvider extends ContentProvider {
         }
 
         try {
-            Log.i("CREATE_FILE", filename+"   "+ fileContents +"  sha: " + fileHashValue);
             outputStream = currentContext.openFileOutput(filename, Context.MODE_PRIVATE);
             synchronized (outputStream){
                 outputStream.write(fileContents.getBytes());
@@ -298,8 +281,6 @@ public class SimpleDhtProvider extends ContentProvider {
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-        Log.v("insert", key +" : " + value );
         return uri;
     }
 
@@ -310,7 +291,6 @@ public class SimpleDhtProvider extends ContentProvider {
         //initialiseNodeIds();
         currentContext = this.getContext();
 
-
         mContentResolver = currentContext.getContentResolver();
 
         mUri = buildUri("content", "edu.buffalo.cse.cse486586.simpledht.provider");
@@ -319,13 +299,11 @@ public class SimpleDhtProvider extends ContentProvider {
         String portStr = tel.getLine1Number().substring(tel.getLine1Number().length() - 4);
         final String portNumber = String.valueOf((Integer.parseInt(portStr) * 2));
 
-        Log.i("BOOT_UP", portNumber);
         // If current port is zeroAVD add it in its lookUpMap
         myPortId = portStr;         // Ex: 5554
         mySocketId = portNumber;    // Ex: 11108
         if (myPortId.equals(zeroAVD)) {
             try {
-                Log.i("SEND_AWAKE_SIGNAL", myPortId);
                 String hash = genHash(zeroAVD);
                 lookUpMap.put(myPortId, hash);
                 sortedLookUpMap.put(hash, mySocketId);
@@ -365,7 +343,6 @@ public class SimpleDhtProvider extends ContentProvider {
 
         // TODO Auto-generated method stub
         String[] columnNames = {"key", "value"};
-        Log.i("QUERY_FOR_KEY", selection);
         cursor = new MatrixCursor(columnNames);
 
         String selfPortHash = null;
@@ -382,12 +359,10 @@ public class SimpleDhtProvider extends ContentProvider {
         // blank as, node_join req never goes to the AVD 0
         if ((selfPortHash.equals(successor) && selfPortHash.equals(predessor) || (predessor.equals("") && successor.equals("")))) {
             // For single AVD, it doesnt matter
-            Log.i("Single_AVD_QUERY", selection);
             if(selection.equals(LDUMP) || selection.equals(GDUMP)) {
                 return getAllDataFromLocal(uri);
             }
             else {
-                Log.i("QUERY-LOCAL-SEARCH", selection);
                 cursor = findInLocal(selection);
                 if(cursor != null){
                     return cursor;
@@ -395,18 +370,14 @@ public class SimpleDhtProvider extends ContentProvider {
             }
         }
         else if(selection.equals(LDUMP)){
-            Log.i("LOCAL_DUMP", "Querying Local Dump");
             return getAllDataFromLocal(uri);
         }
         else if(selection.equals(GDUMP)){
             // Get all the messages stored in entire DHT
-            Log.i("QUERY-GDUMP", "Get all the messages stored in DHT");
             new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, GDUMP_QUERY, mySocketId);
-            Log.i("Wait_Start", "globalQueryResultReceived:: " + globalQueryResultReceived);
             while(globalQueryResultReceived != portNumbers.size()) {
                 // wait here
             }
-            Log.i("Wait_Over", "globalQueryResultReceived:: " + globalQueryResultReceived);
             globalQueryResultReceived = 0;
             return cursor;
 
@@ -416,24 +387,20 @@ public class SimpleDhtProvider extends ContentProvider {
             String where = whereCanInsert(keyToFind);
             if(where.equals("PREDESSOR")){
                 // Send message to Predessor
-                Log.i("QUERY-PREDESSOR-SEARCH", keyToFind +"  " + sortedLookUpMap.get(predessor));
                 sendQuery(keyToFind, mySocketId, predessor);
 
             }
             else if(where.equals("SUCCESSOR")){
                 // Send message to Successor
-                Log.i("QUERY-SUCCESSOR-SEARCH", keyToFind +"  " + sortedLookUpMap.get(successor));
                 sendQuery(keyToFind, mySocketId, successor);
             }
             else if(where.equals("SELF")){
-                Log.i("QUERY-LOCAL-SEARCH", keyToFind);
                 cursor = findInLocal(keyToFind);
                 if(cursor != null){
                     return cursor;
                 }
             }
         }
-        Log.i("Return_Cursor", "Returning Cursor From query Method");
         return cursor;
     }
 
@@ -467,13 +434,11 @@ public class SimpleDhtProvider extends ContentProvider {
 
         new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, msg, sortedLookUpMap.get(target), keyToFind, myPortId);
 
-        Log.i("Boolean_Values_Before", "thisIsAnotherAVDSQuery:: "+ thisIsAnotherAVDSQuery +"   waitTillQueryResult:" + waitTillQueryResult);
         if(!thisIsAnotherAVDSQuery) {
             while (!waitTillQueryResult) {
 
             }
         }
-        Log.i("Boolean_Values_After", "thisIsAnotherAVDSQuery:: "+ thisIsAnotherAVDSQuery +"   waitTillQueryResult:" + waitTillQueryResult);
         thisIsAnotherAVDSQuery = false;
         waitTillQueryResult = false;
     }
@@ -595,17 +560,12 @@ public class SimpleDhtProvider extends ContentProvider {
             order += p + "  ";
         }
 
-        //Log.i("SORT_ORDER::  " , order);
-
         int index = portNumbers.indexOf(myPortHash);
         int prevIndex = (index + portNumbers.size() - 1) % portNumbers.size();
         int nextIndex = (index+1) % portNumbers.size();
 
         predessor = portNumbers.get(prevIndex);
         successor = portNumbers.get(nextIndex);
-
-        Log.i("MY_INFO", "My Port:  " + myPortId +"  MyPort Hash: " + myPortHash + "  Predessor Hash:  " + predessor + "  Successor Hash:  " + successor);
-
     }
 
     private class ServerTask extends AsyncTask<ServerSocket, String, Void> {
@@ -641,7 +601,6 @@ public class SimpleDhtProvider extends ContentProvider {
                     String messageType = splittedMessage[0].split(":")[1];
 
                     if (messageType.equals(NODE_JOIN)) {
-                        Log.i("UPDATE_LOOK_UP_MAP", splittedMessage[1]);
                         String clientPortNumber = splittedMessage[1].split(":")[1];
                         try {
                             String hash = DHT.genHash(clientPortNumber);
@@ -655,7 +614,6 @@ public class SimpleDhtProvider extends ContentProvider {
                                 Collections.sort(portNumbers);
                             }
                             DHT.updateSuccessorsAndPredessors();
-                            Log.i("LOOKUP_TABLE_UPDATED", "YES");
                         } catch (NoSuchAlgorithmException e) {
                             e.printStackTrace();
                         }
@@ -669,58 +627,35 @@ public class SimpleDhtProvider extends ContentProvider {
                         OutputStream outputStream = null;
 
                         for (String client : connectedClientsSockets) {
-//                            Socket newSocket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-//                                    Integer.parseInt(client));
-//                            newSocket.setTcpNoDelay(true);
-//                            newSocket.setSoTimeout(1000);
-//                            outputStream = newSocket.getOutputStream();
-//                            OutputStreamWriter out = new OutputStreamWriter(outputStream,
-//                                    "UTF-8");
-//
-//                            Log.i("SENDING_BROADCAST_MSG", "Sending to: " + client + " " + broadCastMessage.getString());
-//
-//                            dos = new DataOutputStream(outputStream);
-//                            dos.writeUTF(broadCastMessage.getString());
-//                            outputStream.close();
-//                            dos.close();
-//                            newSocket.close();
                             DHT.sendBroadCastMessage(broadCastMessage.getString(), client);
                         }
 
                     } else if (messageType.equals(BROADCAST)) {
-                        Log.i("RECEIVED_BROADCAST_MSG", splittedMessage[1].split(":")[1]);
                         DHT.updateLookUpMap(splittedMessage[1].split(":")[1]);
                         DHT.updateSuccessorsAndPredessors();
                     } else if (messageType.equals(INSERT)) {
-                        Log.i("INSERT_REQUEST", splittedMessage[1].split(":")[1]);
                         String key = splittedMessage[1].split(":")[1];
                         String value = splittedMessage[2].split(":")[1];
 //
                         String whereToInsert = DHT.whereCanInsert(key);
                         if(whereToInsert == null){
-                            Log.i("whereToInsert", "null");
                         }
-                        Log.i("whereToInsert", whereToInsert);
                         if(whereToInsert.equals("SELF")){
-                            Log.i("INSERT_IN_LOCALDB", key + " : " + value);
                             DHT.insertInLocalDb(mUri, key, value);
                         }
                         else if(whereToInsert.equals("SUCCESSOR")){
-                            Log.i("ASKING_SUCCER_TO_INSERT", key+" : " + value);
                             //askSuccessorToInsertMessage(key, value);
                             DHT.askSuccessorToInsertMessage(key, value);
                         }
                     }
                     else if(messageType.equals(QUERY)) {
                         thisIsAnotherAVDSQuery = true;
-                        Log.i("QUERY_SERVER", splittedMessage[1]);
                         String keyToSearch = splittedMessage[2].split(":")[1];
                         queryGeneratedFrom = splittedMessage[3].split(":")[1];
                         DHT.query(mUri, null, keyToSearch, null, null);
                     }
                     else if(messageType.equals(QUERY_ANSWER)) {
                         String keyToSearch = splittedMessage[1].split(":")[1];
-                        Log.i(QUERY_ANSWER, splittedMessage[2]);
                         String value = splittedMessage[2].split(":")[1];
                         String[] columnNames = {"key", "value"};
                         MatrixCursor cursor1 = new MatrixCursor(columnNames);
@@ -733,7 +668,7 @@ public class SimpleDhtProvider extends ContentProvider {
                     }
                     else if(messageType.equals(GDUMP_QUERY)) {
                         String queryPort = splittedMessage[1].split(":")[1];
-                        if(!queryPort.equals(myPortId)){
+                        if(!queryPort.equals(mySocketId)){
                             Cursor cursor1 = DHT.getAllDataFromLocal(mUri);
                             int keyIndex = cursor1.getColumnIndex(KEY_FIELD);
                             int valueIndex = cursor1.getColumnIndex(VALUE_FIELD);
@@ -749,28 +684,21 @@ public class SimpleDhtProvider extends ContentProvider {
                                 sb.append(",");
                                 // key value,key value,key value
                             }
-                            Log.i("GDUMP_QUERY_Response", responseMessage.getString());
                             responseMessage.setGDUMP_Response(sb.toString());
                             DHT.sendGlobalMessageResponse(responseMessage);
                             DHT.ForwardGlobalMessageToSUccessor(queryPort);
-                            Log.i("GDUMP_QUERY_Res_Sent", responseMessage.getString());
                         }
-
                     }
                     else if(messageType.equals(GDUMP_QUERY_ANSWER)) {
                         // Write this method
                         // Combine everyones answer and also call to getAllDataFromLocal to get its own keys and
                         // then return the result
                         String[] columnNames = {"key", "value"};
-
-                        Log.i("Data_Received::", String.valueOf(splittedMessage.length));
                         globalQueryResultReceived++;
                         if(splittedMessage.length>2 && splittedMessage[2].length()>0 && splittedMessage[2].indexOf(":")>=0) {
                             String []responseString = splittedMessage[2].split(":");
                             if(responseString.length>=2) {
                                 String data = responseString[1];
-
-                                Log.i("GDMP_QUERY_ANSWER", "globalQueryResultReceived:: " + globalQueryResultReceived + " PORTs:" + portNumbers.size());
                                 getKeyValuePairs(data);
                             }
                         }
@@ -778,7 +706,6 @@ public class SimpleDhtProvider extends ContentProvider {
                         if(globalQueryResultReceived == portNumbers.size()-1) {
                             //globalQueryResultReceived = 0;
                             // Get All Data Of Current AVD
-                            Log.i("Match", "globalQueryResultReceived == portNumbers.size()-1");
                             Cursor cursor1 = DHT.getAllDataFromLocal(mUri);
                             MatrixCursor mCursor = new MatrixCursor(columnNames);
 
@@ -788,7 +715,6 @@ public class SimpleDhtProvider extends ContentProvider {
                             }
                             // Now Merge the cursor and MatrixCursor
                             MergeCursor mergeCursor = new MergeCursor(new Cursor[] { mCursor, cursor1 });
-                            Log.i("SettingMergeCursor", "Set MergeCursor");
                             cursor = mergeCursor;   // Set main cursor of SIMPLEDHT to this mergedCursor
 
                             globalQueryResultReceived++; // Now again increase here, so the while loop breaks
@@ -796,17 +722,13 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     }
                     else if(messageType.equals(DELETE)) {
-                        Log.i("DELETE_SERVER", splittedMessage[1]);
                         String keyToSearch = splittedMessage[2].split(":")[1];
                         //queryGeneratedFrom = splittedMessage[3].split(":")[1];
                         DHT.delete(mUri,keyToSearch, null);
                     }
                     else if(message.equals(GDUMP_DELETE)) {
-                        Log.i("DELETE_SERVER_ALL", "Delete all messages from local");
                         String queryPortId = splittedMessage[1].split(":")[1];
-
                         DHT.deleteAllDataFromLocal(mUri);
-                        Log.i("PORT_IDS", "MyPortId::"+myPortId+"  QueryPort: "+ queryPortId);
                         if(!queryPortId.equals(myPortId)){
                             // ASk my successor to delete their all queries
                             DHT.askSuccessorToDeleteItsOwnRecords();
@@ -814,8 +736,8 @@ public class SimpleDhtProvider extends ContentProvider {
                     }
 
                 } catch (IOException e) {
-                    Log.i("Server_Failed", "YE");
                     Log.e(TAG, "Client Disconnected");
+                    e.printStackTrace();
                 } catch (Exception e) {
                     e.printStackTrace();
                     Log.e(TAG, "Failed to accept connection");
@@ -831,49 +753,6 @@ public class SimpleDhtProvider extends ContentProvider {
                 }
             }
         }
-
-        /*private void askSuccessorToInsertMessage(String key, String value) {
-
-            Socket newSocket = null;
-            OutputStream outputStream = null;
-            DataOutputStream dos = null;
-            InputStream stream = null;
-
-            String successorPort = sortedLookUpMap.get(successor);
-            Message message = new Message(INSERT);
-            message.setKey(key);
-            message.setValue(value);
-            try {
-                newSocket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
-                        Integer.parseInt(successorPort));
-                newSocket.setTcpNoDelay(true);
-                newSocket.setSoTimeout(1000);
-                outputStream = newSocket.getOutputStream();
-                OutputStreamWriter out = new OutputStreamWriter(outputStream,
-                        "UTF-8");
-
-                Log.i("SENDING_INSERT_MSG", "Sending to: " + successorPort + " " + message.getString());
-
-                dos = new DataOutputStream(outputStream);
-                dos.writeUTF(message.getString());
-                outputStream.close();
-                dos.close();
-                newSocket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                try {
-                    if (outputStream != null)
-                        outputStream.close();
-                    if (dos != null)
-                        dos.close();
-                    if (newSocket != null)
-                        newSocket.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }*/
     }
 
     private void askSuccessorToInsertMessage(String key, String value) {
@@ -931,19 +810,11 @@ public class SimpleDhtProvider extends ContentProvider {
                             Integer.parseInt(zeroAVDSocketId));
 
                     stream = socket.getOutputStream();
-
-                    OutputStreamWriter out = new OutputStreamWriter(stream,
-                            "UTF-8");
                     dos = new DataOutputStream(stream);
-
                     Message message = new Message(NODE_JOIN);
                     message.setClient(portNumber);
-
-                    Log.i("Sending_node_join_req","Sending_node_join_req");
                     dos.writeUTF(message.getString());
 
-                    stream.flush();
-                    out.flush();
                 }
                 else if(order.equals(BROADCAST)){
                     String broadCastMessage = msgs[1];
@@ -952,22 +823,10 @@ public class SimpleDhtProvider extends ContentProvider {
                                     Integer.parseInt(client));
 
                     stream = socket.getOutputStream();
-                    OutputStreamWriter out = new OutputStreamWriter(stream,
-                            "UTF-8");
-
-                    Log.i("SENDING_BROADCAST_MSG", "Sending to: " + client + " " + broadCastMessage);
-
                     dos = new DataOutputStream(stream);
                     dos.writeUTF(broadCastMessage);
-                    stream.flush();
-                    out.flush();
                 }
                 else if(order.equals(INSERT)) {
-                    Log.i("CLIENT_INSERT", "ORDER");
-                    Log.i("CLIENT_INSERT", msgs[1]);
-                    Log.i("CLIENT_INSERT", msgs[2]);
-                    Log.i("CLIENT_INSERT", msgs[3]);
-
                     String client = msgs[3];
                     String key = msgs[1];
                     String value = msgs[2];
@@ -976,19 +835,11 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     stream = socket.getOutputStream();
 
-
-                    OutputStreamWriter out = new OutputStreamWriter(stream,
-                            "UTF-8");
                     dos = new DataOutputStream(stream);
                     Message message = new Message(INSERT);
                     message.setKey(key);
                     message.setValue(value);
-
-                    Log.i("Sending_Key_Insert",key +"  :  " + value +":: to: "+client);
                     dos.writeUTF(message.getString());
-
-                    stream.flush();
-                    out.flush();
                 }
                 else if(order.equals(QUERY)) {
                     String target = msgs[1];
@@ -999,7 +850,6 @@ public class SimpleDhtProvider extends ContentProvider {
                     message.setAssociatedPort(myPortId);
                     message.setKeyToSearch(keyToFind);
 
-
                     if(queryGeneratedFrom != null) {
                         message.setQueryPort(queryGeneratedFrom);
                         queryGeneratedFrom = null;
@@ -1007,29 +857,19 @@ public class SimpleDhtProvider extends ContentProvider {
                     else {
                         message.setQueryPort(myPortId);
                     }
-                    Log.i("SEND_QUERY_MSG", msgs[1]);
-
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(target));
 
                     stream = socket.getOutputStream();
-
 
                     OutputStreamWriter out = new OutputStreamWriter(stream,
                             "UTF-8");
                     dos = new DataOutputStream(stream);
 
                     dos.writeUTF(message.getString());
-
-                    stream.flush();
-                    out.flush();
-
                 }
                 else if(order.equals(QUERY_ANSWER)) {
                     Message message = new Message(QUERY_ANSWER);
-
-                    Log.i("SEND_QUERY_MSG_ANSWER", msgs[1]);
-
                     String target = msgs[1];
                     String keyToFind = msgs[2];
                     String value = msgs[4];
@@ -1042,16 +882,9 @@ public class SimpleDhtProvider extends ContentProvider {
 
                     stream = socket.getOutputStream();
 
-
-                    OutputStreamWriter out = new OutputStreamWriter(stream,
-                            "UTF-8");
                     dos = new DataOutputStream(stream);
 
                     dos.writeUTF(message.getString());
-
-                    stream.flush();
-                    out.flush();
-
                 }
                 else if(order.equals(GDUMP_QUERY)) {
                     Message message =  new Message(GDUMP_QUERY);
@@ -1073,49 +906,25 @@ public class SimpleDhtProvider extends ContentProvider {
                         queryPort = currentPort;
                         message.setQueryPort(queryPort);
                     }
-
-                    Log.i("SEND_GLOBAL_QUERY_MSG", msgs[1]);
-
-
                     String successorSocketId = sortedLookUpMap.get(successor);
-
-                    Log.i("Port_info", "MyPOrt : " + mySocketId + " MySuccessor: " + successorSocketId);
-
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(successorSocketId));
 
                     stream = socket.getOutputStream();
 
-
-                    OutputStreamWriter out = new OutputStreamWriter(stream,
-                            "UTF-8");
                     dos = new DataOutputStream(stream);
 
                     dos.writeUTF(message.getString());
-
-                    stream.flush();
-                    out.flush();
-                    Log.i("Global_Message_Sent", successorSocketId);
                 }
                 else if(order.equals(GDUMP_QUERY_ANSWER)) {
                     String target = msgs[1];
                     String responseMessage = msgs[2];
-                    Log.i("Send_Global_Response", "Sending Global Response To :  " + target);
-
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(target));
 
                     stream = socket.getOutputStream();
-
-
-                    OutputStreamWriter out = new OutputStreamWriter(stream,
-                            "UTF-8");
                     dos = new DataOutputStream(stream);
-
                     dos.writeUTF(responseMessage);
-
-                    stream.flush();
-                    out.flush();
                 }
                 else if(order.equals(DELETE)) {
                     String target = msgs[1];
@@ -1125,54 +934,28 @@ public class SimpleDhtProvider extends ContentProvider {
                     Message message = new Message(DELETE);
                     message.setAssociatedPort(myPortId);
                     message.setKeyToSearch(keyToFind);
-
-
-                    Log.i("SEND_DELETE_MSG", msgs[1]);
-
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(target)*2);
 
                     stream = socket.getOutputStream();
 
-
-                    OutputStreamWriter out = new OutputStreamWriter(stream,
-                            "UTF-8");
                     dos = new DataOutputStream(stream);
-
                     dos.writeUTF(message.getString());
-
-                    stream.flush();
-                    out.flush();
                 }
                 else if(order.equals(GDUMP_DELETE)) {
                     Message message =  new Message(GDUMP_DELETE);
                     String queryPort = msgs[1];
                     message.setQueryPort(queryPort);
-                    Log.i("SEND_GLOBAL_DELETE_MSG", msgs[1]);
-
-                    // sortedLookUp Hash-SocketID
-                    //LOokup portId - Hash
-
                     String successorSocketId = sortedLookUpMap.get(successor);
                     socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                             Integer.parseInt(successorSocketId));
-
-                    Log.i("SUCCESSOR_DELETE", "Send Message To "+ successorSocketId);
                     stream = socket.getOutputStream();
-
-
-                    OutputStreamWriter out = new OutputStreamWriter(stream,
-                            "UTF-8");
                     dos = new DataOutputStream(stream);
-
                     dos.writeUTF(message.getString());
-
-                    stream.flush();
-                    out.flush();
                 }
             }
             catch (UnknownHostException unknownHost){
-                Log.i("Unknown_host", "Unknown_host");
+                Log.e("Unknown_host", "Unknown_host");
             }
             catch (IOException io){
                 System.out.println(io.getStackTrace());
